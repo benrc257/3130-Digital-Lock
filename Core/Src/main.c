@@ -212,7 +212,16 @@ static void MX_GPIO_Init(void)
 
 // Handling of keypad input detection
 int detectcode(void) {
-	
+		GPIO_PinState keydetected = GPIO_PIN_RESET;
+		while (keydetected == GPIO_PIN_RESET) {
+			
+			keydetected = 
+			HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1) +
+			HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_2) +
+			HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_3) +
+			HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4);
+			
+		}
 }
 
 /**
