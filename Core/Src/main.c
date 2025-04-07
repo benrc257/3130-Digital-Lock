@@ -144,12 +144,15 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
 	/*
+		PINS
 		Row 0 - PB8, Row 1 - PB9, Row 2 - PB10, Row 3 - PB11
-		Col 0 - PB1, Col 1 - PB2, Col 2 - PB3, Col 4 - PB4
-		1, 2, 3, A
-		4, 5, 6, B
-		7, 8, 9, C
-		*, 0, #, D
+		Col 0 - PB1, Col 1 - PB2, Col 2 - PB3, Col 3 - PB4
+		
+		       KEY - INDEX
+		1, 2, 3, A - 0, 1, 2, 3
+		4, 5, 6, B - 4, 5, 6, 7
+		7, 8, 9, C - 8, 9, 10, 11
+		*, 0, #, D - 12, 13, 14, 15
 	*/
 	
   /*Configure GPIO pin : PB1 */
@@ -212,16 +215,31 @@ static void MX_GPIO_Init(void)
 
 // Handling of keypad input detection
 int detectcode(void) {
-		GPIO_PinState keydetected = GPIO_PIN_RESET;
-		while (keydetected == GPIO_PIN_RESET) {
+		int rows = GPIO_PIN_RESET, cols = GPIO_PIN_RESET, keydetected = 0;
+	
+		while (cols == GPIO_PIN_RESET) { // while no key is pressed, loop
 			
-			keydetected = 
-			HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1) +
-			HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_2) +
-			HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_3) +
-			HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4);
+			// checking column pins
+			cols = 
+				(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1)*1) +
+				(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_2)*2) +
+				(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_3)*3) +
+				(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4)*4);
+			
+			//checking row pins
+			rows =
+				(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_8)*1) +
+				(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_9)*5) +
+				(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_10)*9) +
+				(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_11)*13);
 			
 		}
+		
+		// calculating which key was detected
+		keydetected = (cols-1)+(rows-1);
+		
+		return keydetected;
+		
 }
 
 /**
