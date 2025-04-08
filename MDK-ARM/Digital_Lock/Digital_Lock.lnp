@@ -1,0 +1,28 @@
+--cpu=Cortex-M4.fp.sp --branchpatch=sdcomp-29491-629360
+"digital_lock\startup_stm32l476xx.o"
+"digital_lock\main.o"
+"digital_lock\stm32l4xx_it.o"
+"digital_lock\stm32l4xx_hal_msp.o"
+"digital_lock\stm32l4xx_hal_uart.o"
+"digital_lock\stm32l4xx_hal_uart_ex.o"
+"digital_lock\stm32l4xx_hal.o"
+"digital_lock\stm32l4xx_hal_rcc.o"
+"digital_lock\stm32l4xx_hal_rcc_ex.o"
+"digital_lock\stm32l4xx_hal_flash.o"
+"digital_lock\stm32l4xx_hal_flash_ex.o"
+"digital_lock\stm32l4xx_hal_flash_ramfunc.o"
+"digital_lock\stm32l4xx_hal_gpio.o"
+"digital_lock\stm32l4xx_hal_i2c.o"
+"digital_lock\stm32l4xx_hal_i2c_ex.o"
+"digital_lock\stm32l4xx_hal_dma.o"
+"digital_lock\stm32l4xx_hal_dma_ex.o"
+"digital_lock\stm32l4xx_hal_pwr.o"
+"digital_lock\stm32l4xx_hal_pwr_ex.o"
+"digital_lock\stm32l4xx_hal_cortex.o"
+"digital_lock\stm32l4xx_hal_exti.o"
+"digital_lock\system_stm32l4xx.o"
+"digital_lock\retarget_io.o"
+--strict --scatter "Digital_Lock\Digital_Lock.sct"
+--summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
+--info sizes --info totals --info unused --info veneers
+--list "Digital_Lock.map" -o Digital_Lock\Digital_Lock.axf
