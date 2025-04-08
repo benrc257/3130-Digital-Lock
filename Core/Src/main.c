@@ -28,7 +28,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 int fputc(int, FILE*);
-int detectcode(void);
+unsigned char detectcode(void);
 
 
 /**
@@ -47,12 +47,11 @@ int main(void)
 
 	// Variables
 	int* passcodes = NULL; //we should dynamically allocate each passcode using a list, so we can have unlimited passcodes
-	int admincode = 1580; //used for admin functions of lock
+	unsigned char admincode[4] = {'1' , '5', '8', '0'}; //used for admin functions of lock
 	int lastcode;
 	
   while (1)
   {
-		printf("\nWorking");
     lastcode = detectcode();
   }
 }
@@ -159,131 +158,79 @@ static void MX_GPIO_Init(void)
 		*, 0, #, D - 12, 13, 14, 15
 	*/
 	
-  /*Configure GPIO pin : PB1 */
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
-  GPIO_InitStruct.Pin = GPIO_PIN_1;
+  /*Configure GPIO pin : PB1 - PB4 */
+  GPIO_InitStruct.Pin = GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+	GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
+	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+	
+	/*Configure GPIO pin : PB8 - PB11 */
+  GPIO_InitStruct.Pin = GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
 	GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
 	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 	
-	/*Configure GPIO pin : PB2 */
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET);
-  GPIO_InitStruct.Pin = GPIO_PIN_2;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-	GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
-	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-	
-	/*Configure GPIO pin : PB3 */
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, GPIO_PIN_RESET);
-  GPIO_InitStruct.Pin = GPIO_PIN_3;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-	GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
-	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-	
-	/*Configure GPIO pin : PB4 */
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_RESET);
-  GPIO_InitStruct.Pin = GPIO_PIN_4;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-	GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
-	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-	
-	/*Configure GPIO pin : PB8 */
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
-  GPIO_InitStruct.Pin = GPIO_PIN_8;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-	GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
-	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-	
-	/*Configure GPIO pin : PB9 */
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_RESET);
-  GPIO_InitStruct.Pin = GPIO_PIN_9;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-	GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
-	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-	
-	/*Configure GPIO pin : PB10 */
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_RESET);
-  GPIO_InitStruct.Pin = GPIO_PIN_10;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-	GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
-	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-	
-	/*Configure GPIO pin : PB11 */
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_RESET);
-  GPIO_InitStruct.Pin = GPIO_PIN_11;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-	GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
-	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
 }
 
 // Handling of keypad input detection
-int detectcode(void) {
-		int rows = 0, cols = 0, helddown = 1, keydetected = 0;
+unsigned char detectcode(void) {
+	unsigned char keymap[4][4] =
+		{{'1', '2', '3', 'A'},
+		{'4', '5', '6', 'B'},
+		{'7', '8', '9', 'C'},
+		{'*', '0', '#', 'D'}};
+	int col = 0, row = 0;
+	uint16_t colpins[4] = {GPIO_PIN_1, GPIO_PIN_2, GPIO_PIN_3, GPIO_PIN_4};
+	uint16_t rowpins[4] = {GPIO_PIN_8, GPIO_PIN_9, GPIO_PIN_10, GPIO_PIN_11};
 	
-		do {
-			
-			// checking column pins
-			if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1) != GPIO_PIN_RESET) {
-				cols = 1;
-			} else if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_2) == GPIO_PIN_RESET) {
-				cols = 2;
-			} else if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_3) == GPIO_PIN_RESET) {
-				cols = 3;
-			} else if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4) == GPIO_PIN_RESET) {
-				cols = 4;
-			} else {
-				cols = 0;
-			}
-			
-			// checking row pins
-			if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_8) != GPIO_PIN_RESET) {
-				rows = 1;
-			} else if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_9) != GPIO_PIN_RESET) {
-				rows = 2;
-			} else if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_10) != GPIO_PIN_RESET) {
-				rows = 3;
-			} else if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_11) != GPIO_PIN_RESET) {
-				rows = 4;
-			} else {
-				rows = 0;
-			}
-
-			
-		} while (cols == 0 || rows == 0);  // while no key is pressed, loop
+	// Setting all columns high
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4, GPIO_PIN_SET);
+	
+	// Detecting if a key is pressed
+	while (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11) == GPIO_PIN_RESET);	
+	
+	// Detecting which row was pressed
+	for (int i = 0; i < 4; i++) {
 		
-		/*do {
-				//checking for held pins
-				helddown =
-					HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1) +
-					HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_2) +
-					HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_3) +
-					HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4) +
-					HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_8) +
-					HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_9) +
-					HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_10) +
-					HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_11);
-			
-		} while (helddown != 0); // loops while key is held down*/
+		// Checking test row
+		if (HAL_GPIO_ReadPin(GPIOB, rowpins[i]) == GPIO_PIN_SET) {
+			row = i;
+			break;
+		}
 		
-		// calculating which key was detected
-		keydetected = (cols-1)+((rows-1)*4);
-		printf("\nKeypad Value: %d", keydetected);
-		printf("\nCols Value: %d", cols-1);
-		printf("\nRows Value: %d", rows-1);
+	}
+	
+	// Detecting which column was pressed
+	for (int i = 0; i < 4; i++) {
 		
-		return keydetected;
+		// Setting all columns low
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4, GPIO_PIN_RESET);
+		
+		// Setting test column high
+		HAL_GPIO_WritePin(GPIOB, colpins[i], GPIO_PIN_SET);
+		
+		// Checking rows
+		if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11) == GPIO_PIN_SET) {
+			col = i;
+			break;
+		}
+		
+	}
+	
+	// Handle held key
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4, GPIO_PIN_SET);
+	while (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11) == GPIO_PIN_SET);	
+	
+	printf("\nKey: %c", keymap[row][col]);
+	
+	// Return character
+	return keymap[row][col];
 		
 }
 
+// This function reroutes printf calls to USART2 for external debugging using TeraTerm
 int fputc(int ch, FILE *f)
 {
 	HAL_UART_Transmit(&huart2, (uint8_t *)&ch, 1, 0xFFFF);
