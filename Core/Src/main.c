@@ -18,7 +18,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stdio.h"
-
+#include "stdbool.h"
 
 /* Private variables ---------------------------------------------------------*/
 UART_HandleTypeDef huart2;
@@ -31,6 +31,14 @@ int fputc(int, FILE*);
 
 // Keypad Functions
 unsigned char detectkey(void);
+bool iskeypressed(void);
+
+// LCD Functions
+void LCD_nibble_write(uint8_t temp, uint8_t s); //configures message for data (1) or instructions (0) with s
+void Write_SR_LCD(uint8_t temp); //writes data to lcd shift register
+void Write_Instr_LCD(uint8_t code); //writes instructions to LCD
+void Write_Char_LCD(uint8_t code); //writes character to LCD
+void Write_String_LCD(char *temp); //writes string to LCD
 
 
 /**
@@ -51,13 +59,260 @@ int main(void)
 	int* passcodes = NULL; //we should dynamically allocate each passcode using a list, so we can have unlimited passcodes
 	unsigned char admincode[4] = {'1' , '5', '8', '0'}; //used for admin functions of lock
 	int lastcode;
+	unsigned char keypressed;
+		char* line;
+		bool top = true;
+	
+  /* LCD controller reset sequence*/ 
+		HAL_Delay(20);
+		LCD_nibble_write(0x30,0);
+		HAL_Delay(5);
+		LCD_nibble_write(0x30,0);
+		HAL_Delay(1);
+		LCD_nibble_write(0x30,0);
+		HAL_Delay(1);
+		LCD_nibble_write(0x20,0);
+		HAL_Delay(1);
+		Write_Instr_LCD(0x28); /* set 4 bit data LCD - two line display - 5x8 font*/
+		Write_Instr_LCD(0x0E); /* turn on display, turn on cursor , turn off blinking*/
+		Write_Instr_LCD(0x01); /* clear display screen and return to home position*/
+		Write_Instr_LCD(0x06); /* set write direction */
+	
+		
+		
+		// Write Digital Lock to screen
+		line = "Digital Lock";
+		Write_String_LCD(line);
+		
+		// Wait for a key to be pressed, clear screen
+		while(iskeypressed() == false);
+		Write_Instr_LCD(0x01);
 	
   while (1)
   {
-    lastcode = detectkey();
-  }
+		// Wait for a key to be pressed
+		keypressed = detectkey();
+		
+		// Handling input
+		switch (keypressed) {
+			case '*':
+				Write_Instr_LCD(0x08); // turn off screen
+				while (detectkey() != '*'); // keep screen off until * is detected
+				Write_Instr_LCD(0xE); // turn on screen
+				break;
+			case 'A':
+				Write_Instr_LCD(0x01); // clear first line
+				Write_Instr_LCD(0x02); // clear second line
+				break;
+			case 'B':
+				if (top) {
+					Write_Instr_LCD(0xC0); // if on top, go to bottom line
+					top = false;
+				} else {
+					Write_Instr_LCD(0x80); // if on bottom, go to top line
+					top = true;
+				}
+				break;
+			case 'C':
+				Write_Instr_LCD(0x10); // Move cursor left
+				Write_Char_LCD(' '); // Print space
+				Write_Instr_LCD(0x10); // Move cursor left
+				break;
+			case 'D':
+				Write_Instr_LCD(0x14); // Move cursor right
+				break;
+			case '#':
+				Write_Instr_LCD(0x10); // Move cursor right
+				break;
+			default:
+				Write_Char_LCD(keypressed); // write pressed character
+				break;
+		}
+		
+	}
 }
 
+
+
+// Set up the GPIO pins
+static void MX_GPIO_Init(void)
+{
+  uint32_t temp;
+	
+	GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+  /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+	
+	/*Configure GPIO pin : PB1 - PB4 */
+  GPIO_InitStruct.Pin = GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+	GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
+	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+	
+	/*Configure GPIO pin : PB8 - PB11 */
+  GPIO_InitStruct.Pin = GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+	GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
+	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+	
+	/*PA5 and PA10 are outputs*/
+	temp = GPIOA->MODER;
+	temp &= ~(0x03<<(2*5));
+	temp|=(0x01<<(2*5));
+	temp &= ~(0x03<<(2*10));
+	temp|=(0x01<<(2*10));
+	GPIOA->MODER = temp;
+	temp=GPIOA->OTYPER;
+	temp &=~(0x01<<5);
+	temp &=~(0x01<<10);
+	GPIOA->OTYPER=temp;temp=GPIOA->PUPDR;
+	temp&=~(0x03<<(2*5));
+	temp&=~(0x03<<(2*10));
+	GPIOA->PUPDR=temp;
+	
+	/*PB5 is output*/
+	temp = GPIOB->MODER;
+	temp &= ~(0x03<<(2*5));
+	temp|=(0x01<<(2*5));
+	GPIOB->MODER = temp;
+	temp=GPIOB->OTYPER;
+	temp &=~(0x01<<5);
+	GPIOB->OTYPER=temp;
+	temp=GPIOB->PUPDR;
+	temp&=~(0x03<<(2*5));
+	GPIOB->PUPDR=temp;
+	
+}
+
+unsigned char detectkey(void) {
+	unsigned char keymap[4][4] =
+		{{'1', '2', '3', 'A'},
+		{'4', '5', '6', 'B'},
+		{'7', '8', '9', 'C'},
+		{'*', '0', '#', 'D'}};
+	int col = 0, row = 0;
+	uint16_t colpins[4] = {GPIO_PIN_1, GPIO_PIN_2, GPIO_PIN_3, GPIO_PIN_4};
+	uint16_t rowpins[4] = {GPIO_PIN_8, GPIO_PIN_9, GPIO_PIN_10, GPIO_PIN_11};
+	
+	// Setting all columns high
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4, GPIO_PIN_SET);
+	
+	// Detecting if a key is pressed
+	while (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11) == GPIO_PIN_RESET);	
+	
+	// Detecting which row was pressed
+	for (int i = 0; i < 4; i++) {
+		
+		// Checking test row
+		if (HAL_GPIO_ReadPin(GPIOB, rowpins[i]) == GPIO_PIN_SET) {
+			row = i;
+			break;
+		}
+		
+	}
+	
+	// Detecting which column was pressed
+	for (int i = 0; i < 4; i++) {
+		
+		// Setting all columns low
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4, GPIO_PIN_RESET);
+		
+		// Setting test column high
+		HAL_GPIO_WritePin(GPIOB, colpins[i], GPIO_PIN_SET);
+		
+		// Checking rows
+		if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11) == GPIO_PIN_SET) {
+			col = i;
+			break;
+		}
+		
+	}
+	
+	// Handle held key
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4, GPIO_PIN_SET);
+	while (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11) == GPIO_PIN_SET);	
+	
+	// Return character
+	return keymap[row][col];
+		
+}
+
+void Write_SR_LCD(uint8_t temp) {
+	int i;
+	uint8_t mask=0b10000000;
+	for(i=0; i<8; i++) {
+		if((temp&mask)==0)
+		GPIOB->ODR&=~(1<<5);
+		else
+		GPIOB->ODR|=(1<<5);
+		
+		/* Sclck */
+		GPIOA->ODR&=~(1<<5);
+		GPIOA->ODR|=(1<<5);
+		HAL_Delay(1);
+		mask=mask>>1;
+	}
+	/*Latch*/
+	GPIOA->ODR|=(1<<10);
+	GPIOA->ODR&=~(1<<10);
+
+}
+
+void LCD_nibble_write(uint8_t temp, uint8_t s){
+	/*writing instruction*/
+	if (s==0){
+		temp=temp&0xF0;
+		temp=temp|0x02; /*RS (bit 0) = 0 for Command EN (bit1)=high */
+		Write_SR_LCD(temp);
+		temp=temp&0xFD; /*RS (bit 0) = 0 for Command EN (bit1) = low*/
+		Write_SR_LCD(temp); }
+	/*writing data*/
+	else if (s==1) {
+		temp=temp&0xF0;
+		temp=temp|0x03; /*RS(bit 0)=1 for data EN (bit1) = high*/
+		Write_SR_LCD(temp);
+		temp=temp&0xFD; /*RS(bit 0)=1 for data EN(bit1) = low*/
+		Write_SR_LCD(temp);
+}}
+
+void Write_Instr_LCD(uint8_t code)
+{
+	LCD_nibble_write(code&0xF0,0);
+	code=code<<4;
+	LCD_nibble_write(code,0);
+}
+
+void Write_Char_LCD(uint8_t code)
+{
+	LCD_nibble_write(code&0xF0,1);
+	code=code<<4;
+	LCD_nibble_write(code,1);
+}
+
+void Write_String_LCD(char *temp) {
+	int i=0;
+	while(temp[i]!=0)
+	{
+		Write_Char_LCD(temp[i]);
+		i=i+1;
+	}
+}
+
+bool iskeypressed(void) {
+	// Setting all columns high
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4, GPIO_PIN_SET);
+	
+	// Detecting if a key is pressed
+	if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11) == GPIO_PIN_RESET) {
+		return false;
+	} else {
+		return true;
+	}
+}
 
 // System Clock Configuration
 void SystemClock_Config(void)
@@ -136,100 +391,6 @@ static void MX_USART2_UART_Init(void)
 
   /* USER CODE END USART2_Init 2 */
 
-}
-
-
-// GPIO Initialization Function
-static void MX_GPIO_Init(void)
-{
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-
-  /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-
-	/*
-		PINS
-		Row 0 - PB8, Row 1 - PB9, Row 2 - PB10, Row 3 - PB11
-		Col 0 - PB1, Col 1 - PB2, Col 2 - PB3, Col 3 - PB4
-		
-		       KEY - INDEX
-		1, 2, 3, A - 0, 1, 2, 3
-		4, 5, 6, B - 4, 5, 6, 7
-		7, 8, 9, C - 8, 9, 10, 11
-		*, 0, #, D - 12, 13, 14, 15
-	*/
-	
-  /*Configure GPIO pin : PB1 - PB4 */
-  GPIO_InitStruct.Pin = GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-	GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
-	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-	
-	/*Configure GPIO pin : PB8 - PB11 */
-  GPIO_InitStruct.Pin = GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-	GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
-	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-	
-}
-
-// Handling of keypad input detection
-unsigned char detectkey(void) {
-	unsigned char keymap[4][4] =
-		{{'1', '2', '3', 'A'},
-		{'4', '5', '6', 'B'},
-		{'7', '8', '9', 'C'},
-		{'*', '0', '#', 'D'}};
-	int col = 0, row = 0;
-	uint16_t colpins[4] = {GPIO_PIN_1, GPIO_PIN_2, GPIO_PIN_3, GPIO_PIN_4};
-	uint16_t rowpins[4] = {GPIO_PIN_8, GPIO_PIN_9, GPIO_PIN_10, GPIO_PIN_11};
-	
-	// Setting all columns high
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4, GPIO_PIN_SET);
-	
-	// Detecting if a key is pressed
-	while (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11) == GPIO_PIN_RESET);	
-	
-	// Detecting which row was pressed
-	for (int i = 0; i < 4; i++) {
-		
-		// Checking test row
-		if (HAL_GPIO_ReadPin(GPIOB, rowpins[i]) == GPIO_PIN_SET) {
-			row = i;
-			break;
-		}
-		
-	}
-	
-	// Detecting which column was pressed
-	for (int i = 0; i < 4; i++) {
-		
-		// Setting all columns low
-		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4, GPIO_PIN_RESET);
-		
-		// Setting test column high
-		HAL_GPIO_WritePin(GPIOB, colpins[i], GPIO_PIN_SET);
-		
-		// Checking rows
-		if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11) == GPIO_PIN_SET) {
-			col = i;
-			break;
-		}
-		
-	}
-	
-	// Handle held key
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4, GPIO_PIN_SET);
-	while (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11) == GPIO_PIN_SET);	
-	
-	printf("\nKey: %c", keymap[row][col]);
-	
-	// Return character
-	return keymap[row][col];
-		
 }
 
 // This function reroutes printf calls to USART2 for external debugging using TeraTerm
