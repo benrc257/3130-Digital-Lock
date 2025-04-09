@@ -60,75 +60,75 @@ int main(void)
 	unsigned char admincode[4] = {'1' , '5', '8', '0'}; //used for admin functions of lock
 	int lastcode;
 	unsigned char keypressed;
-		char* line;
-		bool top = true;
+	char* line;
+	bool top = true;
+
+/* LCD controller reset sequence*/ 
+	HAL_Delay(20);
+	LCD_nibble_write(0x30,0);
+	HAL_Delay(5);
+	LCD_nibble_write(0x30,0);
+	HAL_Delay(1);
+	LCD_nibble_write(0x30,0);
+	HAL_Delay(1);
+	LCD_nibble_write(0x20,0);
+	HAL_Delay(1);
+	Write_Instr_LCD(0x28); /* set 4 bit data LCD - two line display - 5x8 font*/
+	Write_Instr_LCD(0x0E); /* turn on display, turn on cursor , turn off blinking*/
+	Write_Instr_LCD(0x01); /* clear display screen and return to home position*/
+	Write_Instr_LCD(0x06); /* set write direction */
+
 	
-  /* LCD controller reset sequence*/ 
-		HAL_Delay(20);
-		LCD_nibble_write(0x30,0);
-		HAL_Delay(5);
-		LCD_nibble_write(0x30,0);
-		HAL_Delay(1);
-		LCD_nibble_write(0x30,0);
-		HAL_Delay(1);
-		LCD_nibble_write(0x20,0);
-		HAL_Delay(1);
-		Write_Instr_LCD(0x28); /* set 4 bit data LCD - two line display - 5x8 font*/
-		Write_Instr_LCD(0x0E); /* turn on display, turn on cursor , turn off blinking*/
-		Write_Instr_LCD(0x01); /* clear display screen and return to home position*/
-		Write_Instr_LCD(0x06); /* set write direction */
 	
-		
-		
-		// Write Digital Lock to screen
-		line = "Digital Lock";
-		Write_String_LCD(line);
-		
-		// Wait for a key to be pressed, clear screen
-		while(iskeypressed() == false);
-		Write_Instr_LCD(0x01);
+	// Write Digital Lock to screen
+	line = "Digital Lock";
+	Write_String_LCD(line);
 	
-  while (1)
-  {
-		// Wait for a key to be pressed
-		keypressed = detectkey();
-		
-		// Handling input
-		switch (keypressed) {
-			case '*':
-				Write_Instr_LCD(0x08); // turn off screen
-				while (detectkey() != '*'); // keep screen off until * is detected
-				Write_Instr_LCD(0xE); // turn on screen
-				break;
-			case 'A':
-				Write_Instr_LCD(0x01); // clear first line
-				Write_Instr_LCD(0x02); // clear second line
-				break;
-			case 'B':
-				if (top) {
-					Write_Instr_LCD(0xC0); // if on top, go to bottom line
-					top = false;
-				} else {
-					Write_Instr_LCD(0x80); // if on bottom, go to top line
-					top = true;
-				}
-				break;
-			case 'C':
-				Write_Instr_LCD(0x10); // Move cursor left
-				Write_Char_LCD(' '); // Print space
-				Write_Instr_LCD(0x10); // Move cursor left
-				break;
-			case 'D':
-				Write_Instr_LCD(0x14); // Move cursor right
-				break;
-			case '#':
-				Write_Instr_LCD(0x10); // Move cursor right
-				break;
-			default:
-				Write_Char_LCD(keypressed); // write pressed character
-				break;
-		}
-		
+	// Wait for a key to be pressed, clear screen
+	while(iskeypressed() == false);
+	Write_Instr_LCD(0x01);
+
+while (1)
+{
+	// Wait for a key to be pressed
+	keypressed = detectkey();
+	
+	// Handling input
+	switch (keypressed) {
+		case '*':
+			Write_Instr_LCD(0x08); // turn off screen
+			while (detectkey() != '*'); // keep screen off until * is detected
+			Write_Instr_LCD(0xE); // turn on screen
+			break;
+		case 'A':
+			Write_Instr_LCD(0x01); // clear first line
+			Write_Instr_LCD(0x02); // clear second line
+			break;
+		case 'B':
+			if (top) {
+				Write_Instr_LCD(0xC0); // if on top, go to bottom line
+				top = false;
+			} else {
+				Write_Instr_LCD(0x80); // if on bottom, go to top line
+				top = true;
+			}
+			break;
+		case 'C':
+			Write_Instr_LCD(0x10); // Move cursor left
+			Write_Char_LCD(' '); // Print space
+			Write_Instr_LCD(0x10); // Move cursor left
+			break;
+		case 'D':
+			Write_Instr_LCD(0x14); // Move cursor right
+			break;
+		case '#':
+			Write_Instr_LCD(0x10); // Move cursor right
+			break;
+		default:
+			Write_Char_LCD(keypressed); // write pressed character
+			break;
+	}
+	
 	}
 }
 
