@@ -28,7 +28,9 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 int fputc(int, FILE*);
-unsigned char detectcode(void);
+
+// Keypad Functions
+unsigned char detectkey(void);
 
 
 /**
@@ -52,7 +54,7 @@ int main(void)
 	
   while (1)
   {
-    lastcode = detectcode();
+    lastcode = detectkey();
   }
 }
 
@@ -175,7 +177,7 @@ static void MX_GPIO_Init(void)
 }
 
 // Handling of keypad input detection
-unsigned char detectcode(void) {
+unsigned char detectkey(void) {
 	unsigned char keymap[4][4] =
 		{{'1', '2', '3', 'A'},
 		{'4', '5', '6', 'B'},
