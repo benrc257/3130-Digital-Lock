@@ -32,6 +32,7 @@ int fputc(int, FILE*);
 // Keypad Functions
 unsigned char detectkey(void);
 bool iskeypressed(void);
+void codeentry(char* entry);
 
 // LCD Functions
 void LCD_nibble_write(uint8_t temp, uint8_t s); //configures message for data (1) or instructions (0) with s
@@ -40,6 +41,10 @@ void Write_Instr_LCD(uint8_t code); //writes instructions to LCD
 void Write_Char_LCD(uint8_t code); //writes character to LCD
 void Write_String_LCD(char *temp); //writes string to LCD
 
+// Passcode Functions
+bool checkcode(char* entry, char* codes, uint16_t total); // Validates codes
+char* editcodes(char* entry, char* codes, uint16_t total, uint8_t mode); // Add/Removes codes
+void displaycodes(char* codes, uint16_t total); // Display available codes
 
 /**
   * @brief  The application entry point.
@@ -57,12 +62,14 @@ int main(void)
 
 	// Variables
 	int* passcodes = NULL; //we should dynamically allocate each passcode using a list, so we can have unlimited passcodes
-	unsigned char admincode[4] = {'1' , '5', '8', '0'}; //used for admin functions of lock
-	int lastcode;
-	unsigned char keypressed;
+	char admincode[4] = {'2' , '5', '8', '0'}; //used for admin functions of lock
+	char codes[100][4] = {}; // Stores all codes for comparison
+	char entry[4] = {}; // Stores current code
+	char keypressed;
+	int totalcodes = 0;
 	char* line;
-	bool top = true;
-
+	bool locked = false;
+		
 /* LCD controller reset sequence*/ 
 	HAL_Delay(20);
 	LCD_nibble_write(0x30,0);
@@ -77,58 +84,26 @@ int main(void)
 	Write_Instr_LCD(0x0E); /* turn on display, turn on cursor , turn off blinking*/
 	Write_Instr_LCD(0x01); /* clear display screen and return to home position*/
 	Write_Instr_LCD(0x06); /* set write direction */
-
-	
 	
 	// Write Digital Lock to screen
 	line = "Digital Lock";
 	Write_String_LCD(line);
+	HAL_Delay(2500);
 	
-	// Wait for a key to be pressed, clear screen
-	while(iskeypressed() == false);
-	Write_Instr_LCD(0x01);
-
-while (1)
-{
-	// Wait for a key to be pressed
-	keypressed = detectkey();
+	// Ask for initial code
+	line = "Please select a passcode.";
+	Write_String_LCD(line);
+	Write_Instr_LCD(0xC0); // Go to bottom line
 	
-	// Handling input
-	switch (keypressed) {
-		case '*':
-			Write_Instr_LCD(0x08); // turn off screen
-			while (detectkey() != '*'); // keep screen off until * is detected
-			Write_Instr_LCD(0xE); // turn on screen
-			break;
-		case 'A':
-			Write_Instr_LCD(0x01); // clear first line
-			Write_Instr_LCD(0x02); // clear second line
-			break;
-		case 'B':
-			if (top) {
-				Write_Instr_LCD(0xC0); // if on top, go to bottom line
-				top = false;
-			} else {
-				Write_Instr_LCD(0x80); // if on bottom, go to top line
-				top = true;
-			}
-			break;
-		case 'C':
-			Write_Instr_LCD(0x10); // Move cursor left
-			Write_Char_LCD(' '); // Print space
-			Write_Instr_LCD(0x10); // Move cursor left
-			break;
-		case 'D':
-			Write_Instr_LCD(0x14); // Move cursor right
-			break;
-		case '#':
-			Write_Instr_LCD(0x10); // Move cursor right
-			break;
-		default:
-			Write_Char_LCD(keypressed); // write pressed character
-			break;
-	}
+	// Wait for inital code
+	codeentry(entry);
 	
+	while (1) {
+		
+		
+		
+		
+		
 	}
 }
 
@@ -312,6 +287,44 @@ bool iskeypressed(void) {
 	} else {
 		return true;
 	}
+}
+
+
+void codeentry(char* entry) {
+	char keypressed;
+	uint8_t length;
+	
+	switch (keypressed) {
+			case '*':
+				Write_Instr_LCD(0x08); // turn off screen
+				while (detectkey() != '*'); // keep screen off until * is detected
+				Write_Instr_LCD(0xE); // turn on screen
+				break;
+			case 'A': // Enter
+				
+				return;
+				break;
+			case 'B': // Cancel
+				if (top) {
+					Write_Instr_LCD(0xC0); // if on top, go to bottom line
+					top = false;
+				} else {
+					Write_Instr_LCD(0x80); // if on bottom, go to top line
+					top = true;
+				}
+				break;
+			case 'C': // Clear
+				Write_Instr_LCD(0x10); // Move cursor left
+				Write_Char_LCD(' '); // Print space
+				Write_Instr_LCD(0x10); // Move cursor left
+				break;
+			case 'D': // Delete
+				Write_Instr_LCD(0x14); // Move cursor right
+				break;
+			default:
+				Write_Char_LCD(keypressed); // write pressed character
+				break;
+		}
 }
 
 // System Clock Configuration
