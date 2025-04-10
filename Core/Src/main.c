@@ -89,14 +89,24 @@ int main(void)
 	line = "Digital Lock";
 	Write_String_LCD(line);
 	HAL_Delay(2500);
+	Write_Instr_LCD(0x01); // Clear Screen
 	
 	// Ask for initial code
-	line = "Please select a passcode.";
+	line = "Enter Code:";
 	Write_String_LCD(line);
 	Write_Instr_LCD(0xC0); // Go to bottom line
 	
 	// Wait for inital code
 	codeentry(entry);
+	
+	//save initial code
+	for (int i = 0; i < 4; i++) {
+		codes[0][i] = entry[i];
+	}
+	
+	// End startup
+	Write_Instr_LCD(0x01); // Clear Screen
+	
 	
 	while (1) {
 		
@@ -294,44 +304,47 @@ void codeentry(char* entry) {
 	char keypressed;
 	uint8_t length = 0;
 	
-	switch (keypressed) {
-			case '*': // Do nothing (unused)
-				break;
-			case '#': // Do nothing (unused)
-				break;
-			case 'A': // Enter
-				if (length == 4) { // Confirms full passcode is entered
-					return;
-				}
-				break;
-			case 'B': // Backspace
-				if (length > 0) {
-					Write_Instr_LCD(0x10); // Move cursor left
-					Write_Char_LCD(' '); // Print space
-					Write_Instr_LCD(0x10); // Move cursor left
-					length--;
-					entry[length] = ' '; // Remove character from array
-				}
-				break;
-			case 'C': // Clear
-				while (length > 0) { // Loop for all characters
-					Write_Instr_LCD(0x10); // Move cursor left
-					Write_Char_LCD(' '); // Print space
-					Write_Instr_LCD(0x10); // Move cursor left
-					length--;
-					entry[length] = ' '; // Remove character from array
-				}
-				break;
-			case 'D': // Do nothing (unused)
-				break;
-			default:
-				if (length < 4) {
-					Write_Char_LCD(keypressed); // Write pressed character
-					entry[length] = keypressed; // Add character to array
-					length++;
-				}
-				break;
-		}
+	while (1) { // Breaks when user hits A
+		keypressed = detectkey(); // Wait for input
+		switch (keypressed) {
+				case '*': // Do nothing (unused)
+					break;
+				case '#': // Do nothing (unused)
+					break;
+				case 'A': // Enter
+					if (length == 4) { // Confirms full passcode is entered
+						return;
+					}
+					break;
+				case 'B': // Backspace
+					if (length > 0) {
+						Write_Instr_LCD(0x10); // Move cursor left
+						Write_Char_LCD(' '); // Print space
+						Write_Instr_LCD(0x10); // Move cursor left
+						length--;
+						entry[length] = ' '; // Remove character from array
+					}
+					break;
+				case 'C': // Clear
+					while (length > 0) { // Loop for all characters
+						Write_Instr_LCD(0x10); // Move cursor left
+						Write_Char_LCD(' '); // Print space
+						Write_Instr_LCD(0x10); // Move cursor left
+						length--;
+						entry[length] = ' '; // Remove character from array
+					}
+					break;
+				case 'D': // Do nothing (unused)
+					break;
+				default:
+					if (length < 4) {
+						Write_Char_LCD(keypressed); // Write pressed character
+						entry[length] = keypressed; // Add character to array
+						length++;
+					}
+					break;
+			}
+	}
 }
 
 // System Clock Configuration
