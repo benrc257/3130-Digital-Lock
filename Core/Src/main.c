@@ -64,7 +64,7 @@ int main(void)
 	int* passcodes = NULL; //we should dynamically allocate each passcode using a list, so we can have unlimited passcodes
 	char admincode[4] = {'2' , '5', '8', '0'}; //used for admin functions of lock
 	char codes[100][4] = {}; // Stores all codes for comparison
-	char entry[4] = {}; // Stores current code
+	char entry[4] = {' ' , ' ', ' ', ' '}; // Stores current code
 	char keypressed;
 	int totalcodes = 0;
 	char* line;
@@ -292,37 +292,44 @@ bool iskeypressed(void) {
 
 void codeentry(char* entry) {
 	char keypressed;
-	uint8_t length;
+	uint8_t length = 0;
 	
 	switch (keypressed) {
-			case '*':
-				Write_Instr_LCD(0x08); // turn off screen
-				while (detectkey() != '*'); // keep screen off until * is detected
-				Write_Instr_LCD(0xE); // turn on screen
+			case '*': // Do nothing (unused)
+				break;
+			case '#': // Do nothing (unused)
 				break;
 			case 'A': // Enter
-				
-				return;
+				if (length == 4) {
+					return;
+				}
 				break;
-			case 'B': // Cancel
-				if (top) {
-					Write_Instr_LCD(0xC0); // if on top, go to bottom line
-					top = false;
-				} else {
-					Write_Instr_LCD(0x80); // if on bottom, go to top line
-					top = true;
+			case 'B': // Backspace
+				if (length > 0) {
+					Write_Instr_LCD(0x10); // Move cursor left
+					Write_Char_LCD(' '); // Print space
+					Write_Instr_LCD(0x10); // Move cursor left
+					length--;
+					entry[length] = ' ';
 				}
 				break;
 			case 'C': // Clear
-				Write_Instr_LCD(0x10); // Move cursor left
-				Write_Char_LCD(' '); // Print space
-				Write_Instr_LCD(0x10); // Move cursor left
+				while (length > 0) { // Loop for all characters
+					Write_Instr_LCD(0x10); // Move cursor left
+					Write_Char_LCD(' '); // Print space
+					Write_Instr_LCD(0x10); // Move cursor left
+					length--;
+					entry[length] = ' '; // remove character from array
+				}
 				break;
-			case 'D': // Delete
-				Write_Instr_LCD(0x14); // Move cursor right
+			case 'D': // Do nothing (unused)
 				break;
 			default:
-				Write_Char_LCD(keypressed); // write pressed character
+				if (length < 4) {
+					Write_Char_LCD(keypressed); // write pressed character
+					entry[length] = keypressed; // add character to array
+					length++;
+				}
 				break;
 		}
 }
