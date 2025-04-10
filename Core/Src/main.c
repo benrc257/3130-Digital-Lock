@@ -300,7 +300,7 @@ void codeentry(char* entry) {
 			case '#': // Do nothing (unused)
 				break;
 			case 'A': // Enter
-				if (length == 4) {
+				if (length == 4) { // Confirms full passcode is entered
 					return;
 				}
 				break;
@@ -310,7 +310,7 @@ void codeentry(char* entry) {
 					Write_Char_LCD(' '); // Print space
 					Write_Instr_LCD(0x10); // Move cursor left
 					length--;
-					entry[length] = ' ';
+					entry[length] = ' '; // Remove character from array
 				}
 				break;
 			case 'C': // Clear
@@ -319,15 +319,15 @@ void codeentry(char* entry) {
 					Write_Char_LCD(' '); // Print space
 					Write_Instr_LCD(0x10); // Move cursor left
 					length--;
-					entry[length] = ' '; // remove character from array
+					entry[length] = ' '; // Remove character from array
 				}
 				break;
 			case 'D': // Do nothing (unused)
 				break;
 			default:
 				if (length < 4) {
-					Write_Char_LCD(keypressed); // write pressed character
-					entry[length] = keypressed; // add character to array
+					Write_Char_LCD(keypressed); // Write pressed character
+					entry[length] = keypressed; // Add character to array
 					length++;
 				}
 				break;
