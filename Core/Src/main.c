@@ -42,9 +42,18 @@ void Write_Char_LCD(uint8_t code); //writes character to LCD
 void Write_String_LCD(char *temp); //writes string to LCD
 
 // Passcode Functions
-bool checkcode(char* entry, char* codes, uint16_t total); // Validates codes
-char* editcodes(char* entry, char* codes, uint16_t total, uint8_t mode); // Add/Removes codes
-void displaycodes(char* codes, uint16_t total); // Display available codes
+uint8_t checkcode(char* entry, char codes[][4], uint16_t total); // Validates codes, 0 = incorrect, 1 = correct, 2 = admin
+char* editcodes(char* entry, char** codes, uint16_t total, uint8_t mode); // Add/Removes codes
+void displaycodes(char** codes, uint16_t total); // Display available codes
+
+// LED Functions
+void setleds(GPIO_PinState); // Sets LED states
+
+// Speaker Functions
+	void buzz(int time); // Buzz speaker for given time in ms
+
+// Global Constants
+const char ADMIN[4] = {'2' , '5', '8', '0'}; //used for admin functions of lock
 
 /**
   * @brief  The application entry point.
@@ -62,13 +71,12 @@ int main(void)
 
 	// Variables
 	int* passcodes = NULL; //we should dynamically allocate each passcode using a list, so we can have unlimited passcodes
-	char admincode[4] = {'2' , '5', '8', '0'}; //used for admin functions of lock
 	char codes[100][4] = {}; // Stores all codes for comparison
 	char entry[4] = {' ' , ' ', ' ', ' '}; // Stores current code
 	char keypressed;
 	int totalcodes = 0;
 	char* line;
-	bool locked = false;
+	int lockstate = 0;
 		
 /* LCD controller reset sequence*/ 
 	HAL_Delay(20);
@@ -103,17 +111,33 @@ int main(void)
 	for (int i = 0; i < 4; i++) {
 		codes[0][i] = entry[i];
 	}
+	totalcodes++;
 	
 	// End startup
 	Write_Instr_LCD(0x01); // Clear Screen
 	
-	
 	while (1) {
+		// Default to locked
+		Write_Instr_LCD(0x01); // Clear Screen
+		line = "LOCKED";
+		Write_String_LCD(line); // Write locked
+		setleds(GPIO_PIN_SET); // Turn on LEDS
+		Write_Instr_LCD(0xC0); // Go to bottom line
 		
+		// Wait for code entry
+		codeentry(entry);
 		
+		// Check code against others
+		lockstate = checkcode(entry, codes, totalcodes);
 		
-		
-		
+		if (lockstate == 0) { //incorrect code
+			buzz(2500);
+			for (int i = 0; i < 20; i++) {
+				setleds(GPIO_PIN_RESET);
+				HAL_Delay(300);
+				setleds(GPIO_PIN_SET);
+			}
+		}
 	}
 }
 
@@ -125,26 +149,27 @@ static void MX_GPIO_Init(void)
   uint32_t temp;
 	
 	GPIO_InitTypeDef GPIO_InitStruct = {0};
-
+	
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+	__HAL_RCC_GPIOC_CLK_ENABLE();
 	
-	/*Configure GPIO pin : PB1 - PB4 */
+	/*Configure KeypadCol GPIO pin : PB1 - PB4 */
   GPIO_InitStruct.Pin = GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
 	GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
 	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 	
-	/*Configure GPIO pin : PB8 - PB11 */
+	/*Configure KeypadRow GPIO pin : PB8 - PB11 */
   GPIO_InitStruct.Pin = GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
 	GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
 	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 	
-	/*PA5 and PA10 are outputs*/
+	/*Configure LCD GPIO pin : PA5 + PA10*/
 	temp = GPIOA->MODER;
 	temp &= ~(0x03<<(2*5));
 	temp|=(0x01<<(2*5));
@@ -159,7 +184,7 @@ static void MX_GPIO_Init(void)
 	temp&=~(0x03<<(2*10));
 	GPIOA->PUPDR=temp;
 	
-	/*PB5 is output*/
+	/*Configure LCD GPIO pin : PB5*/
 	temp = GPIOB->MODER;
 	temp &= ~(0x03<<(2*5));
 	temp|=(0x01<<(2*5));
@@ -171,9 +196,25 @@ static void MX_GPIO_Init(void)
 	temp&=~(0x03<<(2*5));
 	GPIOB->PUPDR=temp;
 	
+	/*Configure LED GPIO pins : PA0 + PA1*/
+	GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+	GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
+	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+	
+	/*Configure LED GPIO pins : PC7 - PC9*/
+	GPIO_InitStruct.Pin = GPIO_PIN_7 | GPIO_PIN_8 | GPIO_PIN_9;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+	GPIO_InitStruct.Speed = GPIO_SPEED_MEDIUM;
+	HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+	
 }
 
-unsigned char detectkey(void) {
+// Detects what key is pressed
+unsigned char detectkey(void) 
+{
 	unsigned char keymap[4][4] =
 		{{'1', '2', '3', 'A'},
 		{'4', '5', '6', 'B'},
@@ -225,8 +266,9 @@ unsigned char detectkey(void) {
 	return keymap[row][col];
 		
 }
-
-void Write_SR_LCD(uint8_t temp) {
+// Writes to the LCD
+void Write_SR_LCD(uint8_t temp)
+{
 	int i;
 	uint8_t mask=0b10000000;
 	for(i=0; i<8; i++) {
@@ -247,7 +289,9 @@ void Write_SR_LCD(uint8_t temp) {
 
 }
 
-void LCD_nibble_write(uint8_t temp, uint8_t s){
+// Sets up the nibbles for writing to LCD
+void LCD_nibble_write(uint8_t temp, uint8_t s)
+{
 	/*writing instruction*/
 	if (s==0){
 		temp=temp&0xF0;
@@ -263,7 +307,7 @@ void LCD_nibble_write(uint8_t temp, uint8_t s){
 		temp=temp&0xFD; /*RS(bit 0)=1 for data EN(bit1) = low*/
 		Write_SR_LCD(temp);
 }}
-
+// Writes instructions to LCD
 void Write_Instr_LCD(uint8_t code)
 {
 	LCD_nibble_write(code&0xF0,0);
@@ -271,6 +315,7 @@ void Write_Instr_LCD(uint8_t code)
 	LCD_nibble_write(code,0);
 }
 
+// Writes characters to LCD
 void Write_Char_LCD(uint8_t code)
 {
 	LCD_nibble_write(code&0xF0,1);
@@ -278,7 +323,9 @@ void Write_Char_LCD(uint8_t code)
 	LCD_nibble_write(code,1);
 }
 
-void Write_String_LCD(char *temp) {
+// Writes strings to LCD
+void Write_String_LCD(char *temp)
+{
 	int i=0;
 	while(temp[i]!=0)
 	{
@@ -287,7 +334,9 @@ void Write_String_LCD(char *temp) {
 	}
 }
 
-bool iskeypressed(void) {
+// Detects if a key is pressed
+bool iskeypressed(void)
+{
 	// Setting all columns high
 	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4, GPIO_PIN_SET);
 	
@@ -299,8 +348,9 @@ bool iskeypressed(void) {
 	}
 }
 
-
-void codeentry(char* entry) {
+// Handles code entry
+void codeentry(char* entry)
+{
 	char keypressed;
 	uint8_t length = 0;
 	
@@ -344,6 +394,64 @@ void codeentry(char* entry) {
 					}
 					break;
 			}
+	}
+}
+
+// Sets led states
+void setleds(GPIO_PinState state)
+{
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0 | GPIO_PIN_1, state);
+	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7 | GPIO_PIN_8, state);
+}
+// Validates codes
+uint8_t checkcode(char* entry, char codes[][4], uint16_t total) 
+{
+	// Checking for admin code
+	for (int j = 0; j < 4; j++) { // compares each character of the codes
+		if (ADMIN[j] == entry[j] && j != 3) { // checks first three characters
+			continue; // continues to next character if correct
+		} else if (ADMIN[j] == entry[j] && j == 3) {
+			return 2;
+		} else {
+			break;
+		}
+	}
+	
+	
+	// Checking against all available codes
+	for (int i = 0; i < total; i++) { // loops for length of total OR until code is found
+		for (int j = 0; j < 4; j++) { // compares each character of the codes
+			if (codes[i][j] == entry[j] && j != 3) { // checks first three characters
+				continue; // continues to next character if correct
+			} else if (codes[i][j] == entry[j] && j == 3) {
+				return 1;
+			} else {
+				break;
+			}
+		}
+	}
+
+	// If no codes match
+	return 0;
+}
+// Add/Removes codes
+char* editcodes(char* entry, char** codes, uint16_t total, uint8_t mode)
+{
+
+}
+// Display available codes
+void displaycodes(char** codes, uint16_t total)
+{
+
+}
+// Buzzes speaker for given time in ms
+void buzz(int time)
+{
+	while (time > 0) {
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET);
+		HAL_Delay(2);
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_RESET);
+		time--;
 	}
 }
 
