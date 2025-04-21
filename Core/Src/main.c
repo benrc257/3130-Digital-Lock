@@ -15,19 +15,34 @@
   ******************************************************************************
   */
 
-/* Includes ------------------------------------------------------------------*/
+// Includes
 #include "main.h"
 #include "stdio.h"
 #include "stdbool.h"
 
-/* Private variables ---------------------------------------------------------*/
+// Global variables
 UART_HandleTypeDef huart2;
 
-/* Private function prototypes -----------------------------------------------*/
+// Init Functions
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 int fputc(int, FILE*);
+void SysTick_Initialize(uint32_t);
+void EXTI_PC13_Init();
+
+// Delay Function
+void Delay(uint32_t delay)
+{
+  uint32_t i = 0, n = 0;
+  for (n = 0; n < delay; n++)
+  {
+    for(i = 0; i < 138; i++)
+    {
+      __asm("nop");
+    }
+  }
+}
 
 // Keypad Functions
 unsigned char detectkey(void);
@@ -43,14 +58,19 @@ void Write_String_LCD(char *temp); //writes string to LCD
 
 // Passcode Functions
 uint8_t checkcode(char* entry, char codes[][4], uint16_t total); // Validates codes, 0 = incorrect, 1 = correct, 2 = admin
-char* editcodes(char* entry, char** codes, uint16_t total, uint8_t mode); // Add/Removes codes
-void displaycodes(char** codes, uint16_t total); // Display available codes
+uint16_t editcodes(char codes[][4], uint16_t total, bool mode); // Add/Removes codes
+void clearcodes(char codes[][4], uint16_t total); // Clear all codes
+void displaycodes(char codes[][4], uint16_t total); // Display available codes
 
 // LED Functions
 void setleds(GPIO_PinState); // Sets LED states
+void flashleds(bool state); // Flashes LEDs if true is passed
 
 // Speaker Functions
-	void buzz(int time); // Buzz speaker for given time in ms
+void buzz(int time); // Buzz speaker for given time in ms
+
+// Admin functions
+uint16_t adminmenu(char* entry, char codes[][4], uint16_t total);
 
 // Global Constants
 const char ADMIN[4] = {'2' , '5', '8', '0'}; //used for admin functions of lock
@@ -68,26 +88,27 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
+	EXTI_PC13_Init();
 
 	// Variables
 	int* passcodes = NULL; //we should dynamically allocate each passcode using a list, so we can have unlimited passcodes
 	char codes[100][4] = {}; // Stores all codes for comparison
 	char entry[4] = {' ' , ' ', ' ', ' '}; // Stores current code
 	char keypressed;
-	int totalcodes = 0;
+	uint16_t totalcodes = 0;
 	char* line;
 	int lockstate = 0;
 		
 /* LCD controller reset sequence*/ 
-	HAL_Delay(20);
+	Delay(20);
 	LCD_nibble_write(0x30,0);
-	HAL_Delay(5);
+	Delay(5);
 	LCD_nibble_write(0x30,0);
-	HAL_Delay(1);
+	Delay(1);
 	LCD_nibble_write(0x30,0);
-	HAL_Delay(1);
+	Delay(1);
 	LCD_nibble_write(0x20,0);
-	HAL_Delay(1);
+	Delay(1);
 	Write_Instr_LCD(0x28); /* set 4 bit data LCD - two line display - 5x8 font*/
 	Write_Instr_LCD(0x0E); /* turn on display, turn on cursor , turn off blinking*/
 	Write_Instr_LCD(0x01); /* clear display screen and return to home position*/
@@ -96,7 +117,7 @@ int main(void)
 	// Write Digital Lock to screen
 	line = "Digital Lock";
 	Write_String_LCD(line);
-	HAL_Delay(2500);
+	Delay(2500);
 	Write_Instr_LCD(0x01); // Clear Screen
 	
 	// Ask for initial code
@@ -130,14 +151,37 @@ int main(void)
 		// Check code against others
 		lockstate = checkcode(entry, codes, totalcodes);
 		
-		if (lockstate == 0) { //incorrect code
-			buzz(2500);
-			for (int i = 0; i < 20; i++) {
-				setleds(GPIO_PIN_RESET);
-				HAL_Delay(300);
-				setleds(GPIO_PIN_SET);
-			}
+		switch (lockstate) {
+			case 0: // Incorrect Code
+				flashleds(true); // Enable flashing systick
+				buzz(3500); // Buzz speaker
+				flashleds(false); // Disable flashing systick
+				break;
+			case 1: // Correct Code
+				Write_Instr_LCD(0x01); // Clear Screen
+				line = "UNLOCKED";
+				Write_String_LCD(line); // Write unlocked
+				setleds(GPIO_PIN_RESET); // Turn off LEDS
+				Write_Instr_LCD(0xC0); // Go to bottom line
+				line = "10";
+				Write_String_LCD(line); // Write 10
+				Delay(1000);
+	
+				for (int i=9; i < 0; i--) { // Screen Countdown
+					Write_Instr_LCD(0x4); // Decrement cursor
+					Write_Instr_LCD(0x4);
+					line = "  ";
+					Write_String_LCD(line); // Erase previous output
+					snprintf(line, 3, "0%d", i); // Convert i to string
+					Write_String_LCD(line); // Write i
+					Delay(1000);
+				}
+				Write_Instr_LCD(0x01); // Clear Screen
+				break;
+			case 2: // Admin Code
+				totalcodes = adminmenu(entry, codes, totalcodes);
 		}
+		
 	}
 }
 
@@ -212,6 +256,7 @@ static void MX_GPIO_Init(void)
 	
 }
 
+
 // Detects what key is pressed
 unsigned char detectkey(void) 
 {
@@ -266,6 +311,7 @@ unsigned char detectkey(void)
 	return keymap[row][col];
 		
 }
+
 // Writes to the LCD
 void Write_SR_LCD(uint8_t temp)
 {
@@ -280,7 +326,7 @@ void Write_SR_LCD(uint8_t temp)
 		/* Sclck */
 		GPIOA->ODR&=~(1<<5);
 		GPIOA->ODR|=(1<<5);
-		HAL_Delay(1);
+		Delay(1);
 		mask=mask>>1;
 	}
 	/*Latch*/
@@ -288,6 +334,7 @@ void Write_SR_LCD(uint8_t temp)
 	GPIOA->ODR&=~(1<<10);
 
 }
+
 
 // Sets up the nibbles for writing to LCD
 void LCD_nibble_write(uint8_t temp, uint8_t s)
@@ -307,6 +354,7 @@ void LCD_nibble_write(uint8_t temp, uint8_t s)
 		temp=temp&0xFD; /*RS(bit 0)=1 for data EN(bit1) = low*/
 		Write_SR_LCD(temp);
 }}
+
 // Writes instructions to LCD
 void Write_Instr_LCD(uint8_t code)
 {
@@ -315,6 +363,7 @@ void Write_Instr_LCD(uint8_t code)
 	LCD_nibble_write(code,0);
 }
 
+
 // Writes characters to LCD
 void Write_Char_LCD(uint8_t code)
 {
@@ -322,6 +371,7 @@ void Write_Char_LCD(uint8_t code)
 	code=code<<4;
 	LCD_nibble_write(code,1);
 }
+
 
 // Writes strings to LCD
 void Write_String_LCD(char *temp)
@@ -333,6 +383,7 @@ void Write_String_LCD(char *temp)
 		i=i+1;
 	}
 }
+
 
 // Detects if a key is pressed
 bool iskeypressed(void)
@@ -347,6 +398,7 @@ bool iskeypressed(void)
 		return true;
 	}
 }
+
 
 // Handles code entry
 void codeentry(char* entry)
@@ -397,13 +449,27 @@ void codeentry(char* entry)
 	}
 }
 
+
 // Sets led states
 void setleds(GPIO_PinState state)
 {
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0 | GPIO_PIN_1, state);
 	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7 | GPIO_PIN_8, state);
 }
-// Validates codes
+
+
+// Flashes LED with SysTick
+void flashleds(bool state)
+{
+	if (state == true) {
+		SysTick_Initialize(SystemCoreClock/4);
+	} else {
+		SysTick->CTRL &= ~SysTick_CTRL_TICKINT_Msk; // Disable Interrupt
+		SysTick->VAL = 0; // Reset Counter
+	}
+}
+
+// Validates codes (2 = Admin, 1 = Correct, 0 = Incorrect)
 uint8_t checkcode(char* entry, char codes[][4], uint16_t total) 
 {
 	// Checking for admin code
@@ -411,7 +477,7 @@ uint8_t checkcode(char* entry, char codes[][4], uint16_t total)
 		if (ADMIN[j] == entry[j] && j != 3) { // checks first three characters
 			continue; // continues to next character if correct
 		} else if (ADMIN[j] == entry[j] && j == 3) {
-			return 2;
+			return 2; // Return 2 for admin code
 		} else {
 			break;
 		}
@@ -424,7 +490,7 @@ uint8_t checkcode(char* entry, char codes[][4], uint16_t total)
 			if (codes[i][j] == entry[j] && j != 3) { // checks first three characters
 				continue; // continues to next character if correct
 			} else if (codes[i][j] == entry[j] && j == 3) {
-				return 1;
+				return 1; // Return 1 for correct
 			} else {
 				break;
 			}
@@ -434,26 +500,166 @@ uint8_t checkcode(char* entry, char codes[][4], uint16_t total)
 	// If no codes match
 	return 0;
 }
+
 // Add/Removes codes
-char* editcodes(char* entry, char** codes, uint16_t total, uint8_t mode)
+uint16_t editcodes(char codes[][4], uint16_t total, bool mode)
 {
-
+	return NULL;
 }
+
+// Add/Removes codes
+void clearcodes(char codes[][4], uint16_t total)
+{
+	return;
+}
+
 // Display available codes
-void displaycodes(char** codes, uint16_t total)
+void displaycodes(char codes[][4], uint16_t total)
 {
-
+	
 }
+
 // Buzzes speaker for given time in ms
 void buzz(int time)
 {
 	while (time > 0) {
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET);
-		HAL_Delay(2);
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_RESET);
-		time--;
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET); // Enable buzzer
+		Delay(1);
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_RESET); // Disable buzzer
+		Delay(1);
+		time-=2; // Decrement time
 	}
 }
+
+// Handles Admin State
+uint16_t adminmenu(char* entry, char codes[][4], uint16_t total)
+{
+	char* line = "";
+	uint8_t state = 1;
+	unsigned char key = ' ';
+	
+	Write_Instr_LCD(0x01); // Clear Screen
+	line = "ADMIN";
+	Write_String_LCD(line); // Write admin
+	setleds(GPIO_PIN_RESET); // Turn off LEDS
+	Delay(2000);
+	
+	while (key != 'B') {
+		Write_Instr_LCD(0x01); // Clear Screen
+		switch (state) { // Handle displaying options
+			case 1:
+				line = "1 - View Codes";
+				Write_String_LCD(line);
+				break;
+			case 2: 
+				line = "2 - Add Codes";
+				Write_String_LCD(line);
+				break;
+			case 3:
+				line = "3 - Remove Codes";
+				Write_String_LCD(line);
+				break;
+			case 4:	
+				line = "4 - Clear Codes";
+				Write_String_LCD(line);
+				break;
+		}
+		// Write hotkeys
+		Write_Instr_LCD(0xC0); // Go to bottom line
+		line = "A=SEL B=BACK C=>";
+		Write_String_LCD(line);
+		
+		do { // Take input + Validate
+			key = detectkey();
+		} while (key != 'A' && key != 'B' && key != 'C');
+		
+		switch (key) { // Handle input
+			case 'A': // Select
+				switch (state) { // Handles selection based on state
+					case 1: // Display Codes
+						displaycodes(codes, total);
+						break;
+					case 2: // Add Codes
+						total = editcodes(codes, total, true); 
+						break;
+					case 3: // Remove Codes
+						total = editcodes(codes, total, false);
+						break;
+					case 4:	// Clear Codes
+						clearcodes(codes, total);
+						total = 1;
+						break;
+				}
+				break;
+			case 'B': // Back
+				return total; // Return to main
+			case 'C': // Next
+				if (state < 4) {
+					state++;
+				} else {
+					state = 1;
+				}
+				break;
+		}	
+	}
+	
+	// Fallback return statement
+	return total;
+}
+
+// Initializes and sets systick timing
+void SysTick_Initialize(uint32_t ticks)
+{
+  SysTick->LOAD = ticks;
+  SysTick->VAL = 0;
+
+  // Select processor clock to internal: 1 = processor clock; 0 = external clock
+  SysTick->CTRL |= SysTick_CTRL_CLKSOURCE_Msk;
+
+  // Enable counting of SysTick
+  SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk;
+
+  // Enables SysTick interrupt
+  SysTick->CTRL |= SysTick_CTRL_TICKINT_Msk;
+}
+
+void EXTI_PC13_Init()
+{
+  //===== (1) Configure PC13 input
+  RCC->AHB2ENR |= RCC_AHB2ENR_GPIOCEN; /* enable GPIOC clock */
+
+  // Configure PC13 pin input
+  GPIOC->MODER &= ~GPIO_MODER_MODE13;
+  GPIOC->OTYPER &= ~GPIO_OTYPER_OT13;
+  GPIOC->PUPDR &= ~GPIO_PUPDR_PUPD13;
+  GPIOC->PUPDR |= GPIO_PUPDR_PUPD13_1;
+
+  // ===== (2) Connect External Line to the GPI
+  // enable the clock of SYSCFG
+  RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
+
+  // clear the 4 bits of the EXIT5
+  RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
+  SYSCFG->EXTICR[3] &= ~SYSCFG_EXTICR4_EXTI13_PC;
+  SYSCFG->EXTICR[3] |= SYSCFG_EXTICR4_EXTI13_PC;
+  // ===== (3) Rising trigger selection
+  // 0 = trigger disabled, 1 = trigger enabled
+  EXTI->RTSR1 |= EXTI_RTSR1_RT13_Msk;
+
+  // ===== (4) Enable interrupt
+  // 4.1 NVIC enable bit
+  NVIC_EnableIRQ(EXTI15_10_IRQn);
+  // 0 = marked, 1 = not masked (enabled)
+  EXTI->IMR1 |= EXTI_IMR1_IM13;
+}
+
+// Handles Flashing LEDS with SysTick
+void SysTick_Handler(void)
+{
+  HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_0 | GPIO_PIN_1);
+	HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_7 | GPIO_PIN_8);
+}
+
 
 // System Clock Configuration
 void SystemClock_Config(void)
@@ -502,7 +708,6 @@ void SystemClock_Config(void)
 }
 
 
-
 // USART2 Initialization Function
 static void MX_USART2_UART_Init(void)
 {
@@ -533,6 +738,7 @@ static void MX_USART2_UART_Init(void)
   /* USER CODE END USART2_Init 2 */
 
 }
+
 
 // This function reroutes printf calls to USART2 for external debugging using TeraTerm
 int fputc(int ch, FILE *f)
