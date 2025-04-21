@@ -29,7 +29,6 @@ static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 int fputc(int, FILE*);
 void SysTick_Initialize(uint32_t);
-void EXTI_PC13_Init();
 
 // Delay Function
 void Delay(uint32_t delay)
@@ -88,7 +87,6 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
-	EXTI_PC13_Init();
 
 	// Variables
 	int* passcodes = NULL; //we should dynamically allocate each passcode using a list, so we can have unlimited passcodes
@@ -167,7 +165,7 @@ int main(void)
 				Write_String_LCD(line); // Write 10
 				Delay(1000);
 	
-				for (int i=9; i < 0; i--) { // Screen Countdown
+				for (int i=9; i > 0; i--) { // Screen Countdown
 					Write_Instr_LCD(0x4); // Decrement cursor
 					Write_Instr_LCD(0x4);
 					line = "  ";
@@ -623,35 +621,7 @@ void SysTick_Initialize(uint32_t ticks)
   SysTick->CTRL |= SysTick_CTRL_TICKINT_Msk;
 }
 
-void EXTI_PC13_Init()
-{
-  //===== (1) Configure PC13 input
-  RCC->AHB2ENR |= RCC_AHB2ENR_GPIOCEN; /* enable GPIOC clock */
 
-  // Configure PC13 pin input
-  GPIOC->MODER &= ~GPIO_MODER_MODE13;
-  GPIOC->OTYPER &= ~GPIO_OTYPER_OT13;
-  GPIOC->PUPDR &= ~GPIO_PUPDR_PUPD13;
-  GPIOC->PUPDR |= GPIO_PUPDR_PUPD13_1;
-
-  // ===== (2) Connect External Line to the GPI
-  // enable the clock of SYSCFG
-  RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
-
-  // clear the 4 bits of the EXIT5
-  RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
-  SYSCFG->EXTICR[3] &= ~SYSCFG_EXTICR4_EXTI13_PC;
-  SYSCFG->EXTICR[3] |= SYSCFG_EXTICR4_EXTI13_PC;
-  // ===== (3) Rising trigger selection
-  // 0 = trigger disabled, 1 = trigger enabled
-  EXTI->RTSR1 |= EXTI_RTSR1_RT13_Msk;
-
-  // ===== (4) Enable interrupt
-  // 4.1 NVIC enable bit
-  NVIC_EnableIRQ(EXTI15_10_IRQn);
-  // 0 = marked, 1 = not masked (enabled)
-  EXTI->IMR1 |= EXTI_IMR1_IM13;
-}
 
 // Handles Flashing LEDS with SysTick
 void SysTick_Handler(void)
