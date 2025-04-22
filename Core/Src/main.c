@@ -831,10 +831,10 @@ void buzz(int time)
 {
 	while (time > 0) {
 		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET); // Enable buzzer
-		Delay(1);
+		Delay(2);
 		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_RESET); // Disable buzzer
-		Delay(1);
-		time-=2; // Decrement time
+		Delay(2);
+		time-=4; // Decrement time
 	}
 }
 
