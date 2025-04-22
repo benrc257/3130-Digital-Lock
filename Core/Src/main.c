@@ -32,7 +32,7 @@ void Delay(int delay);
 // Keypad Functions
 unsigned char detectkey(void);
 bool iskeypressed(void);
-void codeentry(char* entry);
+void codeentry(char* entry, bool admin);
 
 // LCD Functions
 void LCD_nibble_write(uint8_t temp, uint8_t s); //configures message for data (1) or instructions (0) with s
@@ -58,7 +58,8 @@ void buzz(int time); // Buzz speaker for given time in ms
 uint16_t adminmenu(char codes[][4], uint16_t total);
 
 // Global Variables
-const char ADMIN[4] = {'2' , '5', '8', '0'}; //used for admin functions of lock
+const int CODESIZE = 5; // Sets max codes, max 999
+const char ADMIN[4] = {'2' , '5', '8', '0'}; // Used for admin functions of lock
 
 /**
   * @brief  The application entry point.
@@ -74,7 +75,7 @@ int main(void)
   MX_GPIO_Init();
 	
 	// Variables
-	char codes[100][4] = {}; // Stores all codes for comparison
+	char codes[CODESIZE][4]; // Stores all codes for comparison
 	char entry[4] = {' ' , ' ', ' ', ' '}; // Stores current code
 	uint16_t totalcodes = 0;
 	char* line = NULL;
@@ -112,7 +113,7 @@ int main(void)
 	Write_Instr_LCD(0xC0); // Go to bottom line
 	
 	// Wait for inital code
-	codeentry(entry);
+	codeentry(entry, false);
 	
 	//save initial code
 	for (int i = 0; i < 4; i++) {
@@ -132,7 +133,7 @@ int main(void)
 		Write_Instr_LCD(0xC0); // Go to bottom line
 		
 		// Wait for code entry
-		codeentry(entry);
+		codeentry(entry, true);
 		
 		// Check code against others
 		lockstate = checkcode(entry, codes, totalcodes);
@@ -292,8 +293,10 @@ unsigned char detectkey(void)
 	}
 	
 	// Handle held key
+	Delay(10);
 	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4, GPIO_PIN_SET);
 	while (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11) == GPIO_PIN_SET);	
+	Delay(10);
 	
 	// Return character
 	return keymap[row][col];
@@ -389,10 +392,11 @@ bool iskeypressed(void)
 
 
 // Handles code entry
-void codeentry(char* entry)
+void codeentry(char* entry, bool admin)
 {
 	char keypressed;
-	uint8_t length = 0;
+	uint8_t length = 0, admincode = 0;
+	char* line;
 	
 	while (1) { // Breaks when user hits A
 		keypressed = detectkey(); // Wait for input
@@ -403,7 +407,38 @@ void codeentry(char* entry)
 					break;
 				case 'A': // Enter
 					if (length == 4) { // Confirms full passcode is entered
-						return;
+						for (int i = 0; i < 4; i++) { // Checks for admin code
+							if (entry[i] == ADMIN[i]) {
+								admincode++;
+							}
+						}
+						if (admincode == 4 && admin == false) { // If admin code is not an option, inform user
+							for (int i = 0; i < 4; i++) {
+								Write_Instr_LCD(0x10); // Move cursor left
+								Write_Char_LCD(' '); // Print space
+								Write_Instr_LCD(0x10); // Move cursor left
+							}
+							line = "INVALID CODE";
+							Write_String_LCD(line);
+							Delay(1250);
+							for (int i = 0; i < 12; i++) {
+								Write_Instr_LCD(0x10); // Move cursor left
+								Write_Char_LCD(' '); // Print space
+								Write_Instr_LCD(0x10); // Move cursor left
+							}
+							line = "CHANGE CODE";
+							Write_String_LCD(line);
+							Delay(1250);
+							for (int i = 0; i < 11; i++) {
+								Write_Instr_LCD(0x10); // Move cursor left
+								Write_Char_LCD(' '); // Print space
+								Write_Instr_LCD(0x10); // Move cursor left
+							}
+							admincode = 0;
+							length = 0;
+						} else {
+							return;
+						}
 					}
 					break;
 				case 'B': // Backspace
@@ -494,11 +529,11 @@ uint8_t checkcode(char* entry, char codes[][4], uint16_t total)
 // Add/Removes codes (TRUE = ADD, FALSE = RMV)
 uint16_t editcodes(char codes[][4], uint16_t total, bool mode)
 {
-	char key = 'A', ctostr[1] = {' '};
+	char key = ' ', ctostr[1] = {' '};
 	char* line = "";
 	char linearr[4], num[1] = {' '};
 	char entry[4] = {' ', ' ', ' ', ' '};
-	bool removing[100];
+	bool removing[CODESIZE];
 	uint16_t totalremoved = 0, current = 1;
 	
 	if (mode == true) { // ADD mode
@@ -510,7 +545,7 @@ uint16_t editcodes(char codes[][4], uint16_t total, bool mode)
 			Write_Instr_LCD(0xC0); // Go to bottom line
 			
 			// Wait for code entry
-			codeentry(entry);
+			codeentry(entry, false);
 			
 			// Save code, increment total
 			for (int i = 0; i < 4; i++) {
@@ -534,7 +569,7 @@ uint16_t editcodes(char codes[][4], uint16_t total, bool mode)
 	} else { // RMV mode
 		
 		// Clearing Removing Array
-		for (int i = 0; i < 100; i++) {
+		for (int i = 0; i < CODESIZE; i++) {
 			removing[i] = false;
 		}
 		
@@ -561,7 +596,7 @@ uint16_t editcodes(char codes[][4], uint16_t total, bool mode)
 				snprintf(linearr, 4, "0%d", current);
 			}	else if (current < 10) {
 				snprintf(linearr, 4, "00%d", current);
-			} else if (current == 100) {
+			} else if (current > 99) {
 				snprintf(linearr, 4, "%d", current); 
 			}
 			
@@ -589,9 +624,9 @@ uint16_t editcodes(char codes[][4], uint16_t total, bool mode)
 			Write_String_LCD(line); // Write line
 			
 			// Input validation
-			while (key != '*' && key != 'A' && key != 'B' && key != '#' && key != 'C') {
+			do {
 				key = detectkey();
-			}
+			} while (key != '*' && key != 'A' && key != 'B' && key != '#' && key != 'C');
 			
 			switch (key) {
 				case '*':
@@ -690,7 +725,7 @@ uint16_t editcodes(char codes[][4], uint16_t total, bool mode)
 			Write_Instr_LCD(0xC0); // Go to bottom line
 
 			// Wait for new code
-			codeentry(entry);
+			codeentry(entry, false);
 
 			//save initial code
 			for (int i = 0; i < 4; i++) {
@@ -724,9 +759,9 @@ void clearcodes(char codes[][4])
 	Write_String_LCD(line); // Write line
 	
 	// Input validation
-	while (key != 'A' && key != 'B') {
+	do {
 		key = detectkey();
-	}
+	} while (key != 'A' && key != 'B');
 	
 	if (key == 'B') { // If B, cancel operation
 		return;
@@ -751,7 +786,7 @@ void clearcodes(char codes[][4])
 	Write_Instr_LCD(0xC0); // Go to bottom line
 
 	// Wait for new code
-	codeentry(entry);
+	codeentry(entry, false);
 
 	//save initial code
 	for (int i = 0; i < 4; i++) {
@@ -774,10 +809,10 @@ void displaycodes(char codes[][4], uint16_t total)
 		// Convert current to string
 		if (current > 9) {
 			snprintf(linearr, 4, "0%d", current);
-		}	else if (current < 10) {
-			snprintf(linearr, 4, "00%d", current);
-		} else if (current == 100) {
+		} else if (current > 99) {
 			snprintf(linearr, 4, "%d", current); 
+		} else {
+			snprintf(linearr, 4, "00%d", current);
 		}
 		
 		// Place current code and index into line
@@ -799,9 +834,9 @@ void displaycodes(char codes[][4], uint16_t total)
 		Write_String_LCD(line); // Write line
 		
 		// Input validation
-		while (key != '*' && key != 'B' && key != '#') {
+		do {
 			key = detectkey();
-		}
+		} while (key != '*' && key != 'B' && key != '#');
 		
 		switch (key) {
 			case '*':
