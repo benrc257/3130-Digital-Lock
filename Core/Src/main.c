@@ -529,12 +529,12 @@ uint8_t checkcode(char* entry, char codes[][4], uint16_t total)
 // Add/Removes codes (TRUE = ADD, FALSE = RMV)
 uint16_t editcodes(char codes[][4], uint16_t total, bool mode)
 {
-	char key = ' ', ctostr[1] = {' '};
+	char key = ' ', ctostr[2] = {' '};
 	char* line = "";
 	char linearr[4], num[1] = {' '};
 	char entry[4] = {' ', ' ', ' ', ' '};
 	bool removing[CODESIZE];
-	uint16_t totalremoved = 0, current = 1;
+	int totalremoved = 0, current = 1;
 	
 	if (mode == true) { // ADD mode
 		
@@ -561,11 +561,10 @@ uint16_t editcodes(char codes[][4], uint16_t total, bool mode)
 			Write_String_LCD(line);
 			
 			// Get input + Validate
-			while (key != 'A' && key != 'B') {
+			do {
 				key = detectkey();
-			}
+			} while (key != 'A' && key != 'B');
 		}
-		
 	} else { // RMV mode
 		
 		// Clearing Removing Array
@@ -607,16 +606,15 @@ uint16_t editcodes(char codes[][4], uint16_t total, bool mode)
 			} else { // Marked for removal
 					line = "X";
 			}
-			strcat(line, linearr);
-			strcat(line, " =");
+			Write_String_LCD(line);
+			Write_String_LCD(linearr);
+			Write_String_LCD(" =");
 			for (int i = 0; i < 4; i++) {
 				ctostr[0] = codes[current-1][i];
-				strcat(line, " ");
-				strcat(line, ctostr);
+				ctostr[1] = '\0';
+				Write_String_LCD(" ");
+				Write_String_LCD(ctostr);
 			}
-				
-			// Write code + index
-			Write_String_LCD(line);
 			
 			// Write options
 			Write_Instr_LCD(0xC0); // Go to bottom line
@@ -666,11 +664,9 @@ uint16_t editcodes(char codes[][4], uint16_t total, bool mode)
 		line = "REMOVING:";
 		Write_String_LCD(line); // Write line
 		Write_Instr_LCD(0xC0); // Go to bottom line
-		line = "";
 		snprintf(linearr, 4, "%d", totalremoved);
-		strcat(line, linearr);
-		strcat(line, " CODES");
-		Write_String_LCD(line); // Write line
+		Write_String_LCD(linearr);
+		Write_String_LCD(" CODES");
 		Delay(1500);
 		
 		// Removing marked codes
@@ -686,7 +682,7 @@ uint16_t editcodes(char codes[][4], uint16_t total, bool mode)
 			
 			// Shuffle codes to erase marked code
 			if (current != (total-1)) { // Makes sure marked code is not last code in array
-				for (int j = current; j < total-2; j++) { // Shuffling
+				for (int j = current; j < total-1; j++) { // Shuffling
 						for (int k = 0; k < 4; k++) {
 							codes[j][k] = codes[j+1][k];
 						}
@@ -703,9 +699,8 @@ uint16_t editcodes(char codes[][4], uint16_t total, bool mode)
 		Write_Instr_LCD(0xC0); // Go to bottom line
 		line = "";
 		snprintf(linearr, 4, "%d", totalremoved);
-		strcat(line, linearr);
-		strcat(line, " CODES");
-		Write_String_LCD(line); // Write line
+		Write_String_LCD(linearr);
+		Write_String_LCD(" CODES");
 		Delay(1500);
 		
 		
@@ -717,7 +712,7 @@ uint16_t editcodes(char codes[][4], uint16_t total, bool mode)
 			line = "0 CODES REMAIN";
 			Write_String_LCD(line); // Write line
 			Delay(1500);
-			
+			Write_Instr_LCD(0x01); // Clear Screen
 			
 			// Ask for new code
 			line = "Enter New Code:";
@@ -778,7 +773,7 @@ void clearcodes(char codes[][4])
 	line = "0 CODES REMAIN";
 	Write_String_LCD(line); // Write line
 	Delay(1500);
-	
+	Write_Instr_LCD(0x01); // Clear Screen
 	
 	// Ask for new code
 	line = "Enter New Code:";
@@ -798,9 +793,9 @@ void clearcodes(char codes[][4])
 // Display available codes
 void displaycodes(char codes[][4], uint16_t total)
 {
-	uint16_t current = 1;
+	int current = 1;
 	char key = ' ';
-	char linearr[4], ctostr[1];
+	char linearr[4], ctostr[2];
 	char* line;
 	
 	while (key != 'B') { // Handles menu navigation + user input
@@ -815,18 +810,18 @@ void displaycodes(char codes[][4], uint16_t total)
 			snprintf(linearr, 4, "00%d", current);
 		}
 		
-		// Place current code and index into line
+		// Write current code and index
 		line = "#";
-		strcat(line, linearr);
-		strcat(line, " =");
+		Write_String_LCD(line);
+		Write_String_LCD(linearr);
+		Write_String_LCD(" =");
 		for (int i = 0; i < 4; i++) {
 			ctostr[0] = codes[current-1][i];
-			strcat(line, " ");
-			strcat(line, ctostr);
+			ctostr[1] = '\0';
+			Write_String_LCD(" ");
+			Write_String_LCD(ctostr);
 		}
-			
-		// Write code + index
-		Write_String_LCD(line);
+
 		
 		// Write options
 		Write_Instr_LCD(0xC0); // Go to bottom line
@@ -914,7 +909,6 @@ uint16_t adminmenu(char codes[][4], uint16_t total)
 			case 4:	
 				line = "4 - Clear Codes";
 				Write_String_LCD(line);
-				total = 1;
 				break;
 		}
 		// Write hotkeys
