@@ -19,26 +19,15 @@
 #include "main.h"
 #include "stdio.h"
 #include "stdbool.h"
-
-// Global variables
-UART_HandleTypeDef huart2;
+#include "string.h"
 
 // Init Functions
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_USART2_UART_Init(void);
-int fputc(int, FILE*);
 void SysTick_Initialize(uint32_t);
 
 // Delay Function
-void Delay(int delay)
-{
-	delay = delay * 8000;
-	for (int n = 0; n < delay; n++)
-	{
-		__asm("nop");
-	}
-}
+void Delay(int delay);
 
 // Keypad Functions
 unsigned char detectkey(void);
@@ -55,7 +44,7 @@ void Write_String_LCD(char *temp); //writes string to LCD
 // Passcode Functions
 uint8_t checkcode(char* entry, char codes[][4], uint16_t total); // Validates codes, 0 = incorrect, 1 = correct, 2 = admin
 uint16_t editcodes(char codes[][4], uint16_t total, bool mode); // Add/Removes codes
-void clearcodes(char codes[][4], uint16_t total); // Clear all codes
+void clearcodes(char codes[][4]); // Clear all codes
 void displaycodes(char codes[][4], uint16_t total); // Display available codes
 
 // LED Functions
@@ -68,7 +57,7 @@ void buzz(int time); // Buzz speaker for given time in ms
 // Admin functions
 uint16_t adminmenu(char codes[][4], uint16_t total);
 
-// Global Constants
+// Global Variables
 const char ADMIN[4] = {'2' , '5', '8', '0'}; //used for admin functions of lock
 
 /**
@@ -83,15 +72,19 @@ int main(void)
   SystemClock_Config();
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_USART2_UART_Init();
-
+	
 	// Variables
 	char codes[100][4] = {}; // Stores all codes for comparison
 	char entry[4] = {' ' , ' ', ' ', ' '}; // Stores current code
 	uint16_t totalcodes = 0;
 	char* line = NULL;
+	char num[3];
 	int lockstate = 0;
 		
+	// Reset LED
+	flashleds(false);
+	setleds(GPIO_PIN_RESET);
+	
 /* LCD controller reset sequence*/ 
 	Delay(20);
 	LCD_nibble_write(0x30,0);
@@ -103,14 +96,14 @@ int main(void)
 	LCD_nibble_write(0x20,0);
 	Delay(1);
 	Write_Instr_LCD(0x28); /* set 4 bit data LCD - two line display - 5x8 font*/
-	Write_Instr_LCD(0x0E); /* turn on display, turn on cursor , turn off blinking*/
+	Write_Instr_LCD(0x0C); /* turn on display, turn off cursor*/
 	Write_Instr_LCD(0x01); /* clear display screen and return to home position*/
 	Write_Instr_LCD(0x06); /* set write direction */
 	
 	// Write Digital Lock to screen
 	line = "Digital Lock";
 	Write_String_LCD(line);
-	Delay(2500);
+	Delay(1500);
 	Write_Instr_LCD(0x01); // Clear Screen
 	
 	// Ask for initial code
@@ -159,14 +152,16 @@ int main(void)
 				line = "10";
 				Write_String_LCD(line); // Write 10
 				Delay(1000);
-	
+			
 				for (int i=9; i > 0; i--) { // Screen Countdown
-					Write_Instr_LCD(0x4); // Decrement cursor
-					Write_Instr_LCD(0x4);
+					Write_Instr_LCD(0x10); // Decrement cursor
+					Write_Instr_LCD(0x10);
 					line = "  ";
 					Write_String_LCD(line); // Erase previous output
-					snprintf(line, 3, "0%d", i); // Convert i to string
-					Write_String_LCD(line); // Write i
+					Write_Instr_LCD(0x10); // Decrement cursor
+					Write_Instr_LCD(0x10);
+					snprintf(num, 3, "0%d", i); // Convert i to string
+					Write_String_LCD(num); // Write i
 					Delay(1000);
 				}
 				Write_Instr_LCD(0x01); // Clear Screen
@@ -240,11 +235,11 @@ static void MX_GPIO_Init(void)
 	GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
 	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 	
-	/*Configure LED GPIO pins : PC7 - PC9*/
+	/*Configure LED + Speaker GPIO pins : PC7 - PC9*/
 	GPIO_InitStruct.Pin = GPIO_PIN_7 | GPIO_PIN_8 | GPIO_PIN_9;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-	GPIO_InitStruct.Speed = GPIO_SPEED_MEDIUM;
+	GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
 	HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 	
 }
@@ -446,8 +441,10 @@ void codeentry(char* entry)
 // Sets led states
 void setleds(GPIO_PinState state)
 {
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0 | GPIO_PIN_1, state);
-	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7 | GPIO_PIN_8, state);
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, state);
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, state);
+	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, state);
+	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8, state);
 }
 
 
@@ -494,22 +491,339 @@ uint8_t checkcode(char* entry, char codes[][4], uint16_t total)
 	return 0;
 }
 
-// Add/Removes codes
+// Add/Removes codes (TRUE = ADD, FALSE = RMV)
 uint16_t editcodes(char codes[][4], uint16_t total, bool mode)
 {
-	return NULL;
+	char key = 'A', ctostr[1] = {' '};
+	char* line = "";
+	char linearr[4], num[1] = {' '};
+	char entry[4] = {' ', ' ', ' ', ' '};
+	bool removing[100];
+	uint16_t totalremoved = 0, current = 1;
+	
+	if (mode == true) { // ADD mode
+		
+		while (key != 'B') { //Runs until user hits B
+			Write_Instr_LCD(0x01); // Clear Screen
+			line = "Enter Code:";
+			Write_String_LCD(line); // Write line
+			Write_Instr_LCD(0xC0); // Go to bottom line
+			
+			// Wait for code entry
+			codeentry(entry);
+			
+			// Save code, increment total
+			for (int i = 0; i < 4; i++) {
+				codes[total][i] = entry[i];
+			}
+			total++;
+			
+			Write_Instr_LCD(0x01); // Clear Screen
+			line = "Add another?";
+			Write_String_LCD(line); // Write line
+			Write_Instr_LCD(0xC0); // Go to bottom line
+			line = "A=Yes       B=No";
+			Write_String_LCD(line);
+			
+			// Get input + Validate
+			while (key != 'A' && key != 'B') {
+				key = detectkey();
+			}
+		}
+		
+	} else { // RMV mode
+		
+		// Clearing Removing Array
+		for (int i = 0; i < 100; i++) {
+			removing[i] = false;
+		}
+		
+		Write_Instr_LCD(0x01); // Clear Screen
+		line = "SELECT CODES TO";
+		Write_String_LCD(line); // Write line
+		Write_Instr_LCD(0xC0); // Go to bottom line
+		line = "REMOVE";
+		Write_String_LCD(line); // Write line
+		Delay(1500);
+		Write_Instr_LCD(0x01); // Clear Screen
+		line = "WHEN DONE,";
+		Write_String_LCD(line); // Write line
+		Write_Instr_LCD(0xC0); // Go to bottom line
+		line = "PRESS C";
+		Write_String_LCD(line); // Write line
+		Delay(1500);
+		
+		while (key != 'C') { // Handles menu navigation + user input
+			Write_Instr_LCD(0x01); // Clear Screen
+			
+			// Convert current to string
+			if (current > 9) {
+				snprintf(linearr, 4, "0%d", current);
+			}	else if (current < 10) {
+				snprintf(linearr, 4, "00%d", current);
+			} else if (current == 100) {
+				snprintf(linearr, 4, "%d", current); 
+			}
+			
+			// Place current code and index into line
+			if (removing[current-1] == false) { // Not marked for removal
+				// Place current code and index into line
+				line = "#";
+			} else { // Marked for removal
+					line = "X";
+			}
+			strcat(line, linearr);
+			strcat(line, " =");
+			for (int i = 0; i < 4; i++) {
+				ctostr[0] = codes[current-1][i];
+				strcat(line, " ");
+				strcat(line, ctostr);
+			}
+				
+			// Write code + index
+			Write_String_LCD(line);
+			
+			// Write options
+			Write_Instr_LCD(0xC0); // Go to bottom line
+			line = "<=* A=Y  B=N #=>";
+			Write_String_LCD(line); // Write line
+			
+			// Input validation
+			while (key != '*' && key != 'A' && key != 'B' && key != '#' && key != 'C') {
+				key = detectkey();
+			}
+			
+			switch (key) {
+				case '*':
+					if (current == 1) {
+						current = total;
+					} else {
+						current--;
+					}
+					break;
+				case '#':
+					if (current == total) {
+						current = 1;
+					} else {
+						current++;
+					}
+					break;
+				case 'A':
+					if (removing[current-1] == false) {
+						removing[current-1] = true;
+						totalremoved++;
+					}
+					break;
+				case 'B':
+					if (removing[current-1] == true) {
+						removing[current-1] = false;
+						totalremoved--;
+					}
+					break;
+				case 'C':
+						// Do nothing, while loop will end
+					break;
+			}
+		}
+		
+		// Remove message
+		Write_Instr_LCD(0x01); // Clear Screen
+		line = "REMOVING:";
+		Write_String_LCD(line); // Write line
+		Write_Instr_LCD(0xC0); // Go to bottom line
+		line = "";
+		snprintf(linearr, 4, "%d", totalremoved);
+		strcat(line, linearr);
+		strcat(line, " CODES");
+		Write_String_LCD(line); // Write line
+		Delay(1500);
+		
+		// Removing marked codes
+		for (int i = 0; i < totalremoved; i++) { // Runs once for each code marked
+			
+			// Search for index of a marked code
+			for (int j = 0; j < total; j++) { 
+				if (removing[j] == true) {
+					current = j;
+					break;
+				}
+			}
+			
+			// Shuffle codes to erase marked code
+			if (current != (total-1)) { // Makes sure marked code is not last code in array
+				for (int j = current; j < total-2; j++) { // Shuffling
+						for (int k = 0; k < 4; k++) {
+							codes[j][k] = codes[j+1][k];
+						}
+				}
+				total--; // Adjust total
+			} else { // Marked is last
+				total--; // Adjust total
+			}
+			
+		}
+		Write_Instr_LCD(0x01); // Clear Screen
+		line = "REMOVED";
+		Write_String_LCD(line); // Write line
+		Write_Instr_LCD(0xC0); // Go to bottom line
+		line = "";
+		snprintf(linearr, 4, "%d", totalremoved);
+		strcat(line, linearr);
+		strcat(line, " CODES");
+		Write_String_LCD(line); // Write line
+		Delay(1500);
+		
+		
+		// Checking if 0 codes left
+		if (total == 0) {
+			
+			// Inform user
+			Write_Instr_LCD(0x01); // Clear Screen
+			line = "0 CODES REMAIN";
+			Write_String_LCD(line); // Write line
+			Delay(1500);
+			
+			
+			// Ask for new code
+			line = "Enter New Code:";
+			Write_String_LCD(line);
+			Write_Instr_LCD(0xC0); // Go to bottom line
+
+			// Wait for new code
+			codeentry(entry);
+
+			//save initial code
+			for (int i = 0; i < 4; i++) {
+				codes[0][i] = entry[i];
+			}
+			total++;
+		}
+		
+	}
+	
+	Write_Instr_LCD(0x01); // Clear Screen
+	
+	// Update main total via return
+	return total;
 }
 
 // Add/Removes codes
-void clearcodes(char codes[][4], uint16_t total)
+void clearcodes(char codes[][4])
 {
-	return;
+	char* line;
+	char entry[4], key = ' ';
+	
+	// Confirm Clear
+	Write_Instr_LCD(0x01); // Clear Screen
+	line = "Clear codes?";
+	Write_String_LCD(line);
+			
+	// Write options
+	Write_Instr_LCD(0xC0); // Go to bottom line
+	line = "A=Yes B=No";
+	Write_String_LCD(line); // Write line
+	
+	// Input validation
+	while (key != 'A' && key != 'B') {
+		key = detectkey();
+	}
+	
+	if (key == 'B') { // If B, cancel operation
+		return;
+	}
+	
+	// Inform user
+	Write_Instr_LCD(0x01); // Clear Screen
+	line = "Clearing codes.";
+	Write_String_LCD(line); // Write line
+	Delay(1500);
+	
+	// Obtain new code
+	Write_Instr_LCD(0x01); // Clear Screen
+	line = "0 CODES REMAIN";
+	Write_String_LCD(line); // Write line
+	Delay(1500);
+	
+	
+	// Ask for new code
+	line = "Enter New Code:";
+	Write_String_LCD(line);
+	Write_Instr_LCD(0xC0); // Go to bottom line
+
+	// Wait for new code
+	codeentry(entry);
+
+	//save initial code
+	for (int i = 0; i < 4; i++) {
+		codes[0][i] = entry[i];
+	}
+	
 }
 
 // Display available codes
 void displaycodes(char codes[][4], uint16_t total)
 {
+	uint16_t current = 1;
+	char key = ' ';
+	char linearr[4], ctostr[1];
+	char* line;
 	
+	while (key != 'B') { // Handles menu navigation + user input
+		Write_Instr_LCD(0x01); // Clear Screen
+		
+		// Convert current to string
+		if (current > 9) {
+			snprintf(linearr, 4, "0%d", current);
+		}	else if (current < 10) {
+			snprintf(linearr, 4, "00%d", current);
+		} else if (current == 100) {
+			snprintf(linearr, 4, "%d", current); 
+		}
+		
+		// Place current code and index into line
+		line = "#";
+		strcat(line, linearr);
+		strcat(line, " =");
+		for (int i = 0; i < 4; i++) {
+			ctostr[0] = codes[current-1][i];
+			strcat(line, " ");
+			strcat(line, ctostr);
+		}
+			
+		// Write code + index
+		Write_String_LCD(line);
+		
+		// Write options
+		Write_Instr_LCD(0xC0); // Go to bottom line
+		line = "<=*  B=BACK  #=>";
+		Write_String_LCD(line); // Write line
+		
+		// Input validation
+		while (key != '*' && key != 'B' && key != '#') {
+			key = detectkey();
+		}
+		
+		switch (key) {
+			case '*':
+				if (current == 1) {
+					current = total;
+				} else {
+					current--;
+				}
+				break;
+			case '#':
+				if (current == total) {
+					current = 1;
+				} else {
+					current++;
+				}
+				break;
+			case 'B':
+				// Do nothing
+				break;
+		}
+	}
+	return;
 }
 
 // Buzzes speaker for given time in ms
@@ -521,6 +835,16 @@ void buzz(int time)
 		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_RESET); // Disable buzzer
 		Delay(1);
 		time-=2; // Decrement time
+	}
+}
+
+// Creates a delay in ms
+void Delay(int delay)
+{
+	delay = delay * (SystemCoreClock/5000);
+	for (int n = 0; n < delay; n++)
+	{
+		__asm("nop");
 	}
 }
 
@@ -555,6 +879,7 @@ uint16_t adminmenu(char codes[][4], uint16_t total)
 			case 4:	
 				line = "4 - Clear Codes";
 				Write_String_LCD(line);
+				total = 1;
 				break;
 		}
 		// Write hotkeys
@@ -579,7 +904,7 @@ uint16_t adminmenu(char codes[][4], uint16_t total)
 						total = editcodes(codes, total, false);
 						break;
 					case 4:	// Clear Codes
-						clearcodes(codes, total);
+						clearcodes(codes);
 						total = 1;
 						break;
 				}
@@ -670,46 +995,6 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-}
-
-
-// USART2 Initialization Function
-static void MX_USART2_UART_Init(void)
-{
-
-  /* USER CODE BEGIN USART2_Init 0 */
-
-  /* USER CODE END USART2_Init 0 */
-
-  /* USER CODE BEGIN USART2_Init 1 */
-
-  /* USER CODE END USART2_Init 1 */
-  huart2.Instance = USART2;
-  huart2.Init.BaudRate = 115200;
-  huart2.Init.WordLength = UART_WORDLENGTH_8B;
-  huart2.Init.StopBits = UART_STOPBITS_1;
-  huart2.Init.Parity = UART_PARITY_NONE;
-  huart2.Init.Mode = UART_MODE_TX_RX;
-  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
-  huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-  huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-  if (HAL_UART_Init(&huart2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART2_Init 2 */
-
-  /* USER CODE END USART2_Init 2 */
-
-}
-
-
-// This function reroutes printf calls to USART2 for external debugging using TeraTerm
-int fputc(int ch, FILE *f)
-{
-	HAL_UART_Transmit(&huart2, (uint8_t *)&ch, 1, 0xFFFF);
-	return ch;
 }
 
 /**
