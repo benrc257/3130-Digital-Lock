@@ -31,16 +31,13 @@ int fputc(int, FILE*);
 void SysTick_Initialize(uint32_t);
 
 // Delay Function
-void Delay(uint32_t delay)
+void Delay(int delay)
 {
-  uint32_t i = 0, n = 0;
-  for (n = 0; n < delay; n++)
-  {
-    for(i = 0; i < 138; i++)
-    {
-      __asm("nop");
-    }
-  }
+	delay = delay * 8000;
+	for (int n = 0; n < delay; n++)
+	{
+		__asm("nop");
+	}
 }
 
 // Keypad Functions
@@ -69,7 +66,7 @@ void flashleds(bool state); // Flashes LEDs if true is passed
 void buzz(int time); // Buzz speaker for given time in ms
 
 // Admin functions
-uint16_t adminmenu(char* entry, char codes[][4], uint16_t total);
+uint16_t adminmenu(char codes[][4], uint16_t total);
 
 // Global Constants
 const char ADMIN[4] = {'2' , '5', '8', '0'}; //used for admin functions of lock
@@ -89,12 +86,10 @@ int main(void)
   MX_USART2_UART_Init();
 
 	// Variables
-	int* passcodes = NULL; //we should dynamically allocate each passcode using a list, so we can have unlimited passcodes
 	char codes[100][4] = {}; // Stores all codes for comparison
 	char entry[4] = {' ' , ' ', ' ', ' '}; // Stores current code
-	char keypressed;
 	uint16_t totalcodes = 0;
-	char* line;
+	char* line = NULL;
 	int lockstate = 0;
 		
 /* LCD controller reset sequence*/ 
@@ -177,7 +172,7 @@ int main(void)
 				Write_Instr_LCD(0x01); // Clear Screen
 				break;
 			case 2: // Admin Code
-				totalcodes = adminmenu(entry, codes, totalcodes);
+				totalcodes = adminmenu(codes, totalcodes);
 		}
 		
 	}
@@ -314,7 +309,7 @@ unsigned char detectkey(void)
 void Write_SR_LCD(uint8_t temp)
 {
 	int i;
-	uint8_t mask=0b10000000;
+	uint8_t mask=0x80;
 	for(i=0; i<8; i++) {
 		if((temp&mask)==0)
 		GPIOB->ODR&=~(1<<5);
@@ -460,7 +455,7 @@ void setleds(GPIO_PinState state)
 void flashleds(bool state)
 {
 	if (state == true) {
-		SysTick_Initialize(SystemCoreClock/4);
+		SysTick_Initialize(SystemCoreClock/2);
 	} else {
 		SysTick->CTRL &= ~SysTick_CTRL_TICKINT_Msk; // Disable Interrupt
 		SysTick->VAL = 0; // Reset Counter
@@ -530,7 +525,7 @@ void buzz(int time)
 }
 
 // Handles Admin State
-uint16_t adminmenu(char* entry, char codes[][4], uint16_t total)
+uint16_t adminmenu(char codes[][4], uint16_t total)
 {
 	char* line = "";
 	uint8_t state = 1;
@@ -626,7 +621,7 @@ void SysTick_Initialize(uint32_t ticks)
 // Handles Flashing LEDS with SysTick
 void SysTick_Handler(void)
 {
-  HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_0 | GPIO_PIN_1);
+	HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_0 | GPIO_PIN_1);
 	HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_7 | GPIO_PIN_8);
 }
 
