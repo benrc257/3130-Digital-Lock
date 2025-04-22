@@ -79,8 +79,8 @@ int main(void)
 	char entry[4] = {' ' , ' ', ' ', ' '}; // Stores current code
 	uint16_t totalcodes = 0;
 	char* line = NULL;
-	char num[3];
-	int lockstate = 0;
+	char num[3], unlocked[16];
+	int lockstate = 0, unlockedcount = 0;
 		
 	// Reset LED
 	flashleds(false);
@@ -153,7 +153,7 @@ int main(void)
 				line = "10";
 				Write_String_LCD(line); // Write 10
 				Delay(1000);
-			
+
 				for (int i=9; i > 0; i--) { // Screen Countdown
 					Write_Instr_LCD(0x10); // Decrement cursor
 					Write_Instr_LCD(0x10);
@@ -166,6 +166,13 @@ int main(void)
 					Delay(1000);
 				}
 				Write_Instr_LCD(0x01); // Clear Screen
+				unlockedcount++;
+				line = "# OF UNLOCKS:";
+				Write_String_LCD(line); // Write unlocked
+				Write_Instr_LCD(0xC0); // Go to bottom line
+				snprintf(unlocked, 16, "%d", unlockedcount); // Convert i to string
+				Write_String_LCD(unlocked); // Write unlocked array
+				Delay(1500);
 				break;
 			case 2: // Admin Code
 				totalcodes = adminmenu(codes, totalcodes);
