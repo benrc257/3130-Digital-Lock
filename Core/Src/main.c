@@ -896,7 +896,7 @@ uint16_t adminmenu(char codes[][4], uint16_t total)
 	line = "ADMIN";
 	Write_String_LCD(line); // Write admin
 	setleds(GPIO_PIN_RESET); // Turn off LEDS
-	Delay(2000);
+	Delay(1500);
 	
 	while (key != 'B') {
 		Write_Instr_LCD(0x01); // Clear Screen
