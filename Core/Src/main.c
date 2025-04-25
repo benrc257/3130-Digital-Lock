@@ -551,7 +551,7 @@ uint16_t editcodes(char codes[][4], uint16_t total, bool mode)
 		
 		while (key != 'B') { //Runs until user hits B
 			
-			if (total == CODESIZE) {
+			if (total >= CODESIZE) {
 				Write_Instr_LCD(0x01); // Clear Screen
 				line = "MAX CODES";
 				Write_String_LCD(line); // Write line
