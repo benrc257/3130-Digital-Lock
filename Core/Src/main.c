@@ -58,7 +58,7 @@ void buzz(int time); // Buzz speaker for given time in ms
 uint16_t adminmenu(char codes[][4], uint16_t total);
 
 // Global Variables
-const int CODESIZE = 5; // Sets max codes, max 999
+const int CODESIZE = 5; // Sets max codes, max 999, min 1
 const char ADMIN[4] = {'2' , '5', '8', '0'}; // Used for admin functions of lock
 
 /**
@@ -545,7 +545,23 @@ uint16_t editcodes(char codes[][4], uint16_t total, bool mode)
 	
 	if (mode == true) { // ADD mode
 		
+		
 		while (key != 'B') { //Runs until user hits B
+			
+			if (total == CODESIZE) {
+				Write_Instr_LCD(0x01); // Clear Screen
+				line = "MAX CODES";
+				Write_String_LCD(line); // Write line
+				Write_Instr_LCD(0xC0); // Go to bottom line
+				line = "REACHED";
+				Write_String_LCD(line); // Write line
+				Delay(2000);
+				Write_Instr_LCD(0x01); // Clear Screen
+				return total;
+			}
+			
+			
+			
 			Write_Instr_LCD(0x01); // Clear Screen
 			line = "Enter Code:";
 			Write_String_LCD(line); // Write line
@@ -560,6 +576,19 @@ uint16_t editcodes(char codes[][4], uint16_t total, bool mode)
 			}
 			total++;
 			
+			//Display total codes
+			Write_Instr_LCD(0x01); // Clear Screen
+			line = "Total Codes:";
+			Write_String_LCD(line); // Write line
+			Write_Instr_LCD(0xC0); // Go to bottom line
+			snprintf(linearr, 4, "%d", total); // Convert total to string
+			Write_String_LCD(linearr); // Print total
+			line = "/";
+			snprintf(linearr, 4, "%d", CODESIZE); // Convert CODESIZE to string
+			Write_String_LCD(linearr); // Print CODESIZE
+			Delay(1000);
+			
+			// Ask if the user would like to add more codes
 			Write_Instr_LCD(0x01); // Clear Screen
 			line = "Add another?";
 			Write_String_LCD(line); // Write line
