@@ -140,6 +140,9 @@ int main(void)
 		
 		switch (lockstate) {
 			case 0: // Incorrect Code
+				Write_Instr_LCD(0x01); // Clear Screen
+				line = "INVALID CODE";
+				Write_String_LCD(line); // Write invalid code
 				flashleds(true); // Enable flashing systick
 				buzz(3500); // Buzz speaker
 				flashleds(false); // Disable flashing systick
