@@ -625,6 +625,7 @@ uint16_t editcodes(char codes[][4], uint16_t total, bool mode)
 			snprintf(linearr, 4, "%d", total); // Convert total to string
 			Write_String_LCD(linearr); // Print total
 			line = "/";
+			Write_String_LCD(line);
 			snprintf(linearr, 4, "%d", CODESIZE); // Convert CODESIZE to string
 			Write_String_LCD(linearr); // Print CODESIZE
 			Delay(1000);
