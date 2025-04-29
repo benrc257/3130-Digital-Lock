@@ -697,7 +697,7 @@ uint16_t editcodes(char codes[][4], uint16_t total, bool mode)
 			
 			// Write options
 			Write_Instr_LCD(0xC0); // Go to bottom line
-			line = "<=* A=Y  B=N #=>";
+			line = "A=SEL C=DONE #=>";
 			Write_String_LCD(line); // Write line
 			
 			// Input validation
@@ -992,12 +992,12 @@ uint16_t adminmenu(char codes[][4], uint16_t total)
 		}
 		// Write hotkeys
 		Write_Instr_LCD(0xC0); // Go to bottom line
-		line = "A=SEL B=BACK C=>";
+		line = "A=SEL B=BACK #=>";
 		Write_String_LCD(line);
 		
 		do { // Take input + Validate
 			key = detectkey();
-		} while (key != 'A' && key != 'B' && key != 'C');
+		} while (key != 'A' && key != 'B' && key != '#');
 		
 		switch (key) { // Handle input
 			case 'A': // Select
@@ -1019,7 +1019,7 @@ uint16_t adminmenu(char codes[][4], uint16_t total)
 				break;
 			case 'B': // Back
 				return total; // Return to main
-			case 'C': // Next
+			case '#': // Next
 				if (state < 4) {
 					state++;
 				} else {
