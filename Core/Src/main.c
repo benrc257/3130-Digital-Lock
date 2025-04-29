@@ -470,47 +470,47 @@ void codeentry(char* entry, bool admin)
 						entry[length] = ' '; // Remove character from array
 					}
 					break;
-				case 'D': // Changes * to proper characters
+				case 'D': // Toggles Password Protection
 					if (seecode == 0) {
 					temp1 = length - 1;
 					temp2 = length;
-						while (temp2 != 0) { // Loop for all characters
+						while (temp2 != 0) { 
 								Write_Instr_LCD(0x10); // Move cursor left
-								Write_Char_LCD(entry[temp1]); // Print space
+								Write_Char_LCD(entry[temp1]); // Prints Character for spot
 								Write_Instr_LCD(0x10); // Move cursor left
 								temp1--;
 								temp2--;
 							}
 							while (temp2 < length) {
-								Write_Instr_LCD(0x14);
+								Write_Instr_LCD(0x14); // Moves back to the far right
 								temp2++;
 							}
-							seecode = 1;
+							seecode = 1; // Toggles see code to showing code
 						}
 						else if (seecode == 1) {
 							temp2 = length;
-							while (temp2 > 0) {
+							while (temp2 > 0) { // Moves cursor to the far left
 								Write_Instr_LCD(0x10);
 								temp2--;
 							}
-							while (temp2 < length) {
+							while (temp2 < length) { // Censors password on all characters
 									Write_Char_LCD('*');
 									temp2++;
 							}
-							seecode = 0;
+							seecode = 0; // Toggles see code to censoring code
 						}
 					break;
 				default:
 					if (seecode == 0) {
 						if (length < 4) {
-							Write_Char_LCD('*'); // Write pressed character
+							Write_Char_LCD('*'); // Write censored character when censored
 							entry[length] = keypressed; // Add character to array
 							length++;
 						}
 					}
 					else if (seecode == 1){
 						if (length < 4) {
-							Write_Char_LCD(keypressed); // Write pressed character
+							Write_Char_LCD(keypressed); // Write pressed character when uncensored
 							entry[length] = keypressed; // Add character to array
 							length++;
 						}						
