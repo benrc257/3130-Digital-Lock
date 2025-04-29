@@ -60,7 +60,7 @@ uint16_t adminmenu(char codes[][4], uint16_t total);
 // Global Variables
 const int CODESIZE = 5; // Sets max codes, max 999, min 1
 const char ADMIN[4] = {'2' , '5', '8', '0'}; // Used for admin functions of lock
-const bool seecode = false; // Controls wether digits are shown as numbers or stars
+bool seecode = false; // Controls wether digits are shown as numbers or stars by default
 
 /**
   * @brief  The application entry point.
