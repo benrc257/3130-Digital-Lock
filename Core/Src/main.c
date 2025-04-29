@@ -405,8 +405,9 @@ bool iskeypressed(void)
 void codeentry(char* entry, bool admin)
 {
 	char keypressed;
-	uint8_t length = 0, admincode = 0;
+	uint8_t length = 0, admincode = 0, temp1 = 0, temp2 = 0;
 	char* line;
+	bool seecode = 0;
 	
 	while (1) { // Breaks when user hits A
 		keypressed = detectkey(); // Wait for input
@@ -469,13 +470,50 @@ void codeentry(char* entry, bool admin)
 						entry[length] = ' '; // Remove character from array
 					}
 					break;
-				case 'D': // Do nothing (unused)
+				case 'D': // Changes * to proper characters
+					if (seecode == 0) {
+					temp1 = length - 1;
+					temp2 = length;
+						while (temp2 != 0) { // Loop for all characters
+								Write_Instr_LCD(0x10); // Move cursor left
+								Write_Char_LCD(entry[temp1]); // Print space
+								Write_Instr_LCD(0x10); // Move cursor left
+								temp1--;
+								temp2--;
+							}
+							while (temp2 < length) {
+								Write_Instr_LCD(0x14);
+								temp2++;
+							}
+							seecode = 1;
+						}
+						else if (seecode == 1) {
+							temp2 = length;
+							while (temp2 > 0) {
+								Write_Instr_LCD(0x10);
+								temp2--;
+							}
+							while (temp2 < length) {
+									Write_Char_LCD('*');
+									temp2++;
+							}
+							seecode = 0;
+						}
 					break;
 				default:
-					if (length < 4) {
-						Write_Char_LCD(keypressed); // Write pressed character
-						entry[length] = keypressed; // Add character to array
-						length++;
+					if (seecode == 0) {
+						if (length < 4) {
+							Write_Char_LCD('*'); // Write pressed character
+							entry[length] = keypressed; // Add character to array
+							length++;
+						}
+					}
+					else if (seecode == 1){
+						if (length < 4) {
+							Write_Char_LCD(keypressed); // Write pressed character
+							entry[length] = keypressed; // Add character to array
+							length++;
+						}						
 					}
 					break;
 			}
