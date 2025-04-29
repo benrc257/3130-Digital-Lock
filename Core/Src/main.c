@@ -60,6 +60,7 @@ uint16_t adminmenu(char codes[][4], uint16_t total);
 // Global Variables
 const int CODESIZE = 5; // Sets max codes, max 999, min 1
 const char ADMIN[4] = {'2' , '5', '8', '0'}; // Used for admin functions of lock
+const bool seecode = false; // Controls wether digits are shown as numbers or stars
 
 /**
   * @brief  The application entry point.
@@ -407,7 +408,7 @@ void codeentry(char* entry, bool admin)
 	char keypressed;
 	uint8_t length = 0, admincode = 0, temp1 = 0, temp2 = 0;
 	char* line;
-	bool seecode = 0;
+
 	
 	while (1) { // Breaks when user hits A
 		keypressed = detectkey(); // Wait for input
